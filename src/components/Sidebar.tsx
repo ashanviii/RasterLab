@@ -85,13 +85,13 @@ export default function Sidebar() {
                     className="w-full rounded-lg bg-black/[0.04] dark:bg-white/[0.06] py-1.5 pl-8 pr-2.5 text-[12.5px] text-neutral-700 dark:text-neutral-200 placeholder:text-neutral-400 outline-none focus:ring-1 focus:ring-accent-400"
                   />
                 </div>
-                <div className="scroll-thin mt-2 flex gap-1 overflow-x-auto pb-1">
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
                   {CATEGORIES.map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setActiveCategory(cat)}
                       className={clsx(
-                        'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors duration-150',
+                        'whitespace-nowrap rounded-md px-1.5 py-1 text-[11px] font-medium transition-colors duration-150',
                         activeCategory === cat
                           ? 'bg-accent-500 text-white'
                           : 'bg-black/[0.04] dark:bg-white/[0.06] text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200'
