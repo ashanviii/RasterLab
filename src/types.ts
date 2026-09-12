@@ -17,6 +17,8 @@ export interface ParamDef {
   options?: SelectOption[];
   advanced?: boolean;
   color?: boolean;
+  /** Named section this param renders under in the settings panel, e.g. "Intensity". */
+  group?: string;
 }
 
 export type ShaderCategory =
