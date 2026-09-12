@@ -11,12 +11,12 @@ export default function App() {
   const [renderer, setRenderer] = useState<GLRenderer | null>(null);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return localStorage.getItem('rasterlab-theme') === 'dark';
+    return localStorage.getItem('stencil-theme') === 'dark';
   });
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
-    localStorage.setItem('rasterlab-theme', isDark ? 'dark' : 'light');
+    localStorage.setItem('stencil-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
   return (
