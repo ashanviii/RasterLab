@@ -21,3 +21,6 @@ yarn-error.log*
 # Env
 .env
 .env.local
+
+# Local authentication database and signing secret
+data/
