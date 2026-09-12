@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Eraser,
   Image as ImageIcon,
   Loader2,
   Maximize2,
   Minimize2,
+  Paintbrush,
   RefreshCcw,
+  Trash2,
   UploadCloud,
   Wand2,
   ZoomIn,
@@ -42,6 +45,13 @@ export default function Canvas({ onRendererReady }: Props) {
   const isBackgroundRemoved = useStore((s) => s.isBackgroundRemoved);
   const removeBackground = useStore((s) => s.removeBackground);
   const restoreOriginalBackground = useStore((s) => s.restoreOriginalBackground);
+  const selectedInstanceId = useStore((s) => s.selectedInstanceId);
+  const maskTool = useStore((s) => s.maskTool);
+  const setMaskTool = useStore((s) => s.setMaskTool);
+  const maskBrushSize = useStore((s) => s.maskBrushSize);
+  const setMaskBrushSize = useStore((s) => s.setMaskBrushSize);
+  const maskBrushOpacity = useStore((s) => s.maskBrushOpacity);
+  const setMaskBrushOpacity = useStore((s) => s.setMaskBrushOpacity);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -53,6 +63,8 @@ export default function Canvas({ onRendererReady }: Props) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
+  const [isPaintingMask, setIsPaintingMask] = useState(false);
+  const [brushCursor, setBrushCursor] = useState<{ x: number; y: number } | null>(null);
 
   // Init renderer once.
   useEffect(() => {
@@ -156,6 +168,74 @@ export default function Canvas({ onRendererReady }: Props) {
     },
     [setSplitPosition]
   );
+
+  const lastPaintPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  const paintDab = useCallback(
+    (clientX: number, clientY: number) => {
+      const renderer = rendererRef.current;
+      if (!frameRef.current || !renderer || !selectedInstanceId || maskTool === 'none') return;
+      const rect = frameRef.current.getBoundingClientRect();
+      const u = (clientX - rect.left) / rect.width;
+      const v = (clientY - rect.top) / rect.height;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return;
+      renderer.paintMask(
+        selectedInstanceId,
+        u,
+        v,
+        maskBrushSize / 2 / rect.width,
+        maskTool === 'erase',
+        maskBrushOpacity
+      );
+    },
+    [selectedInstanceId, maskTool, maskBrushSize, maskBrushOpacity]
+  );
+
+  // Paints at (clientX, clientY), interpolating dabs back to the last painted point so a fast
+  // drag still leaves a continuous stroke instead of sparse, disconnected dots.
+  const paintAt = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!frameRef.current) return;
+      const rect = frameRef.current.getBoundingClientRect();
+      setBrushCursor({ x: clientX - rect.left, y: clientY - rect.top });
+
+      const last = lastPaintPointRef.current;
+      if (last) {
+        const dist = Math.hypot(clientX - last.x, clientY - last.y);
+        const step = Math.max(2, maskBrushSize / 4);
+        const steps = Math.max(1, Math.ceil(dist / step));
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps;
+          paintDab(last.x + (clientX - last.x) * t, last.y + (clientY - last.y) * t);
+        }
+      } else {
+        paintDab(clientX, clientY);
+      }
+      lastPaintPointRef.current = { x: clientX, y: clientY };
+    },
+    [paintDab, maskBrushSize]
+  );
+
+  const onMaskPointerMove = useCallback(
+    (e: PointerEvent) => {
+      if (isPaintingMask) paintAt(e.clientX, e.clientY);
+    },
+    [isPaintingMask, paintAt]
+  );
+
+  useEffect(() => {
+    if (!isPaintingMask) return;
+    const up = () => {
+      setIsPaintingMask(false);
+      lastPaintPointRef.current = null;
+    };
+    window.addEventListener('pointermove', onMaskPointerMove);
+    window.addEventListener('pointerup', up);
+    return () => {
+      window.removeEventListener('pointermove', onMaskPointerMove);
+      window.removeEventListener('pointerup', up);
+    };
+  }, [isPaintingMask, onMaskPointerMove]);
 
   useEffect(() => {
     if (!isDraggingSplit) return;
@@ -278,6 +358,33 @@ export default function Canvas({ onRendererReady }: Props) {
             </div>
           </div>
         )}
+
+        {image && maskTool !== 'none' && selectedInstanceId && (
+          <div
+            className="absolute inset-0 z-20 cursor-crosshair"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              setIsPaintingMask(true);
+              lastPaintPointRef.current = null;
+              paintAt(e.clientX, e.clientY);
+            }}
+            onPointerMove={(e) => setBrushCursor({ x: e.clientX - e.currentTarget.getBoundingClientRect().left, y: e.clientY - e.currentTarget.getBoundingClientRect().top })}
+            onPointerLeave={() => setBrushCursor(null)}
+          >
+            {brushCursor && (
+              <div
+                className="pointer-events-none absolute rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
+                style={{
+                  left: brushCursor.x,
+                  top: brushCursor.y,
+                  width: maskBrushSize,
+                  height: maskBrushSize,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {image && (
@@ -330,6 +437,59 @@ export default function Canvas({ onRendererReady }: Props) {
           >
             {isRemovingBackground ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
           </ToolbarIconButton>
+
+          {selectedInstanceId && (
+            <>
+              <div className="mx-1 h-4 w-px bg-black/10 dark:bg-white/10" />
+
+              <ToolbarIconButton
+                title="Erase effect here"
+                active={maskTool === 'erase'}
+                onClick={() => setMaskTool(maskTool === 'erase' ? 'none' : 'erase')}
+              >
+                <Eraser size={14} />
+              </ToolbarIconButton>
+              <ToolbarIconButton
+                title="Add effect back here"
+                active={maskTool === 'add'}
+                onClick={() => setMaskTool(maskTool === 'add' ? 'none' : 'add')}
+              >
+                <Paintbrush size={14} />
+              </ToolbarIconButton>
+              {maskTool !== 'none' && (
+                <>
+                  <input
+                    type="range"
+                    min={8}
+                    max={200}
+                    step={1}
+                    value={maskBrushSize}
+                    onChange={(e) => setMaskBrushSize(parseFloat(e.target.value))}
+                    title={`Brush size (${maskBrushSize}px)`}
+                    className="w-14"
+                    style={{ ['--fill' as string]: `${((maskBrushSize - 8) / (200 - 8)) * 100}%` }}
+                  />
+                  <input
+                    type="range"
+                    min={0.05}
+                    max={1}
+                    step={0.01}
+                    value={maskBrushOpacity}
+                    onChange={(e) => setMaskBrushOpacity(parseFloat(e.target.value))}
+                    title={`Brush opacity (${Math.round(maskBrushOpacity * 100)}%)`}
+                    className="w-14"
+                    style={{ ['--fill' as string]: `${((maskBrushOpacity - 0.05) / (1 - 0.05)) * 100}%` }}
+                  />
+                </>
+              )}
+              <ToolbarIconButton
+                title="Clear this layer's effect entirely"
+                onClick={() => rendererRef.current?.clearMask(selectedInstanceId, 0)}
+              >
+                <Trash2 size={13} />
+              </ToolbarIconButton>
+            </>
+          )}
 
           <div className="mx-1 h-4 w-px bg-black/10 dark:bg-white/10" />
 

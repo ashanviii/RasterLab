@@ -14,18 +14,6 @@ export const BUILTIN_SHADERS: ShaderDef[] = [
       { key: 'greenOffset', label: 'Green Offset', type: 'float', default: 0, min: -50, max: 50, step: 0.5 },
       { key: 'blueOffset', label: 'Blue Offset', type: 'float', default: -8, min: -50, max: 50, step: 0.5 },
       { key: 'angle', label: 'Angle', type: 'float', default: 0, min: 0, max: 360, step: 1, unit: '°', advanced: true },
-      {
-        key: 'blendMode',
-        label: 'Blend Mode',
-        type: 'select',
-        default: 0,
-        options: [
-          { label: 'Normal', value: 0 },
-          { label: 'Screen', value: 1 },
-          { label: 'Add', value: 2 },
-        ],
-        advanced: true,
-      },
     ],
     fragmentShader: buildFragmentShader(
       `
@@ -34,7 +22,7 @@ uniform float u_redOffset;
 uniform float u_greenOffset;
 uniform float u_blueOffset;
 uniform float u_angle;
-uniform float u_blendMode;
+uniform float u_colorBlendMode;
       `,
       `
   vec2 dir = vec2(cos(radians(u_angle)), sin(radians(u_angle)));
@@ -48,12 +36,7 @@ uniform float u_blendMode;
   float b = texture2D(u_texture, bUV).b;
   vec4 orig = texture2D(u_texture, v_uv);
   vec3 split = vec3(r, g, b);
-  vec3 outc = split;
-  if (u_blendMode > 0.5 && u_blendMode < 1.5) {
-    outc = 1.0 - (1.0 - orig.rgb) * (1.0 - split);
-  } else if (u_blendMode > 1.5) {
-    outc = clamp(orig.rgb * 0.4 + split, 0.0, 1.0);
-  }
+  vec3 outc = applyBlend(orig.rgb, split, u_colorBlendMode);
   gl_FragColor = vec4(outc, orig.a);
       `
     ),
@@ -577,8 +560,7 @@ uniform float u_contrast;
     description: 'Luminance-mapped terminal glyphs in place of pixels.',
     thumbnail: 'from-emerald-300 via-emerald-600 to-neutral-950',
     params: [
-      { key: 'cellSize', label: 'Cell Size', type: 'float', default: 12, min: 4, max: 40, step: 1 },
-      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.1, min: 0, max: 2, step: 0.01 },
+      { key: 'cellSize', label: 'Font Size', type: 'float', default: 12, min: 4, max: 40, step: 1, group: 'Character Options' },
       {
         key: 'colorMode',
         label: 'Mode',
@@ -589,15 +571,36 @@ uniform float u_contrast;
           { label: 'Color', value: 1 },
           { label: 'Terminal', value: 2 },
         ],
+        group: 'Character Options',
       },
-      { key: 'invert', label: 'Invert', type: 'bool', default: 0, advanced: true },
+      { key: 'charOpacity', label: 'Char Opacity', type: 'float', default: 1, min: 0, max: 1, step: 0.01, group: 'Character Options' },
+      { key: 'invert', label: 'Invert Mapping', type: 'bool', default: 0, group: 'Character Options' },
+      { key: 'dotGridOverlay', label: 'Dot Grid Overlay', type: 'bool', default: 0, group: 'Character Options' },
+      { key: 'randomizeChars', label: 'Randomize Characters', type: 'bool', default: 0, group: 'Character Options' },
+
+      { key: 'coverage', label: 'Coverage', type: 'float', default: 1, min: 0, max: 1, step: 0.01, group: 'Intensity' },
+      { key: 'edgeEmphasis', label: 'Edge Emphasis', type: 'float', default: 0, min: 0, max: 1, step: 0.01, group: 'Intensity' },
+      { key: 'density', label: 'Density', type: 'float', default: 0.3, min: 0, max: 1, step: 0.01, group: 'Intensity' },
+      { key: 'brightness', label: 'Brightness', type: 'float', default: 1, min: 0, max: 2, step: 0.01, group: 'Intensity' },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.1, min: 0, max: 2, step: 0.01, group: 'Intensity' },
+
+      { key: 'animated', label: 'Animated ASCII', type: 'bool', default: 0, group: 'Animation' },
     ],
     fragmentShader: buildFragmentShader(
       `
 uniform float u_cellSize;
 uniform float u_contrast;
 uniform float u_colorMode;
+uniform float u_colorBlendMode;
+uniform float u_charOpacity;
 uniform float u_invert;
+uniform float u_dotGridOverlay;
+uniform float u_randomizeChars;
+uniform float u_coverage;
+uniform float u_edgeEmphasis;
+uniform float u_density;
+uniform float u_brightness;
+uniform float u_animated;
 
 float asciiLine(vec2 p, vec2 a, vec2 b, float thick) {
   vec2 pa = p - a;
@@ -641,10 +644,27 @@ float asciiGlyph(vec2 p, float level) {
   vec4 src = texture2D(u_texture, sampleUV);
 
   float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+
+  if (u_edgeEmphasis > 0.001) {
+    vec2 stepUV = cell / u_resolution;
+    float lumR = dot(texture2D(u_texture, sampleUV + vec2(stepUV.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+    float lumD = dot(texture2D(u_texture, sampleUV + vec2(0.0, stepUV.y)).rgb, vec3(0.299, 0.587, 0.114));
+    float edge = abs(lum - lumR) + abs(lum - lumD);
+    lum = clamp(lum + edge * u_edgeEmphasis * 2.0, 0.0, 1.0);
+  }
+
   lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+  lum = clamp(lum + (lum - 0.5) * u_density * 1.5 + u_density * 0.15, 0.0, 1.0);
   if (u_invert > 0.5) lum = 1.0 - lum;
-  float level = floor(lum * 5.999);
-  float cov = asciiGlyph(cellUV, level);
+
+  float levelF = lum * 5.999;
+  if (u_randomizeChars > 0.5) {
+    float t = u_animated > 0.5 ? floor(u_time * 6.0) : 0.0;
+    float jitter = (hash12(cellId + t) - 0.5) * 2.4;
+    levelF = clamp(levelF + jitter, 0.0, 5.999);
+  }
+  float level = floor(levelF);
+  float cov = asciiGlyph(cellUV, level) * u_coverage;
 
   vec3 bg = vec3(0.03);
   vec3 fg = vec3(0.92);
@@ -655,8 +675,19 @@ float asciiGlyph(vec2 p, float level) {
     fg = vec3(0.35, 1.0, 0.55);
     bg = vec3(0.0, 0.04, 0.02);
   }
-  vec3 col = mix(bg, fg, cov);
-  gl_FragColor = vec4(col, src.a);
+
+  vec3 col = mix(bg, fg, cov * u_charOpacity);
+  col = applyBlend(src.rgb, col, u_colorBlendMode);
+
+  if (u_dotGridOverlay > 0.5) {
+    vec2 gridUV = fract(v_uv * u_resolution / cell);
+    float gd = length(gridUV);
+    float dotMask = 1.0 - smoothstep(0.03, 0.07, gd);
+    col += dotMask * 0.18;
+  }
+
+  col *= u_brightness;
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), src.a);
       `
     ),
   },

@@ -2,10 +2,16 @@ import { create } from 'zustand';
 import type { PresetDef, ShaderCategory, ShaderDef, StackItem } from '../types';
 import { SHADER_MAP } from '../shaders/registry';
 import { CUSTOM_SHADER_TEMPLATE } from '../shaders/common';
+import { UNIVERSAL_PARAMS } from '../shaders/universalParams';
 import { removeImageBackground } from '../lib/backgroundRemoval';
+
+function withUniversalParams(def: ShaderDef): ShaderDef {
+  return { ...def, params: [...def.params, ...UNIVERSAL_PARAMS] };
+}
 
 export type SidebarTab = 'effects' | 'presets' | 'custom';
 export type ViewMode = 'rendered' | 'original' | 'split';
+export type MaskTool = 'none' | 'erase' | 'add';
 
 interface LoadedImage {
   element: HTMLImageElement;
@@ -86,6 +92,14 @@ interface StencilState {
   setSplitPosition: (n: number) => void;
   zoom: number;
   setZoom: (z: number | ((z: number) => number)) => void;
+
+  // per-layer mask brush
+  maskTool: MaskTool;
+  setMaskTool: (t: MaskTool) => void;
+  maskBrushSize: number;
+  setMaskBrushSize: (n: number) => void;
+  maskBrushOpacity: number;
+  setMaskBrushOpacity: (n: number) => void;
 
   allShaderDefs: () => Record<string, ShaderDef>;
 }
@@ -311,5 +325,15 @@ export const useStore = create<StencilState>((set, get) => ({
   zoom: 1,
   setZoom: (z) => set((s) => ({ zoom: typeof z === 'function' ? z(s.zoom) : z })),
 
-  allShaderDefs: () => ({ ...SHADER_MAP, ...Object.fromEntries(get().customShaders.map((d) => [d.id, d])) }),
+  maskTool: 'none',
+  setMaskTool: (t) => set({ maskTool: t }),
+  maskBrushSize: 40,
+  setMaskBrushSize: (n) => set({ maskBrushSize: n }),
+  maskBrushOpacity: 0.85,
+  setMaskBrushOpacity: (n) => set({ maskBrushOpacity: n }),
+
+  allShaderDefs: () => {
+    const merged = { ...SHADER_MAP, ...Object.fromEntries(get().customShaders.map((d) => [d.id, d])) };
+    return Object.fromEntries(Object.entries(merged).map(([id, def]) => [id, withUniversalParams(def)]));
+  },
 }));

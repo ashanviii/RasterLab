@@ -1,8 +1,25 @@
 import { useState } from 'react';
-import { ChevronDown, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, Gauge, Palette, Play, RotateCcw, SlidersHorizontal, Type } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../store/useStore';
 import ParamControl from './ParamControl';
+import type { ParamDef } from '../types';
+
+const GROUP_ICONS: Record<string, typeof Type> = {
+  Effect: SlidersHorizontal,
+  Intensity: Gauge,
+  Animation: Play,
+  Color: Palette,
+};
+
+function groupIcon(name: string) {
+  return GROUP_ICONS[name] ?? Type;
+}
+
+/** Every param belongs to a group: its own, or an automatic Effect/Advanced bucket. */
+function effectiveGroup(p: ParamDef): string {
+  return p.group ?? (p.advanced ? 'Advanced' : 'Effect');
+}
 
 export default function RightPanel() {
   const stack = useStore((s) => s.stack);
@@ -14,6 +31,15 @@ export default function RightPanel() {
 
   const item = stack.find((i) => i.instanceId === selectedInstanceId);
   const def = item ? allDefs[item.shaderId] : null;
+
+  const groupNames: string[] = [];
+  if (def) {
+    for (const p of def.params) {
+      const g = effectiveGroup(p);
+      if (!groupNames.includes(g)) groupNames.push(g);
+    }
+  }
+  const groupedParams = (name: string): ParamDef[] => def?.params.filter((p) => effectiveGroup(p) === name) ?? [];
 
   return (
     <aside className="glass flex h-full w-[300px] shrink-0 flex-col rounded-2xl overflow-hidden">
@@ -50,36 +76,38 @@ export default function RightPanel() {
             <p className="mt-0.5 text-[11.5px] leading-snug text-neutral-400">{def.description}</p>
           </div>
 
-          <div className="flex flex-col gap-4">
-            {def.params
-              .filter((p) => !p.advanced)
-              .map((p) => (
-                <ParamControl
-                  key={p.key}
-                  def={p}
-                  value={item.params[p.key] ?? p.default}
-                  onChange={(v) => updateParam(item.instanceId, p.key, v)}
-                />
-              ))}
-          </div>
-
-          {def.params.some((p) => p.advanced) && (
-            <div className="mt-5">
-              <button
-                onClick={() => setAdvancedOpen((v) => !v)}
-                className="flex w-full items-center justify-between rounded-lg py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
-              >
-                Advanced
-                <ChevronDown
-                  size={13}
-                  className={clsx('transition-transform duration-200', advancedOpen && 'rotate-180')}
-                />
-              </button>
-              {advancedOpen && (
-                <div className="mt-2.5 flex flex-col gap-4 animate-fade-in">
-                  {def.params
-                    .filter((p) => p.advanced)
-                    .map((p) => (
+          <div className="flex flex-col gap-5">
+            {groupNames.map((name) =>
+              name === 'Advanced' ? (
+                <div key={name}>
+                  <button
+                    onClick={() => setAdvancedOpen((v) => !v)}
+                    className="flex w-full items-center justify-between rounded-lg py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                  >
+                    Advanced
+                    <ChevronDown
+                      size={13}
+                      className={clsx('transition-transform duration-200', advancedOpen && 'rotate-180')}
+                    />
+                  </button>
+                  {advancedOpen && (
+                    <div className="mt-2.5 flex flex-col gap-4 animate-fade-in">
+                      {groupedParams(name).map((p) => (
+                        <ParamControl
+                          key={p.key}
+                          def={p}
+                          value={item.params[p.key] ?? p.default}
+                          onChange={(v) => updateParam(item.instanceId, p.key, v)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div key={name}>
+                  <SectionHeader label={name} icon={groupIcon(name)} />
+                  <div className="mt-2.5 flex flex-col gap-4">
+                    {groupedParams(name).map((p) => (
                       <ParamControl
                         key={p.key}
                         def={p}
@@ -87,12 +115,22 @@ export default function RightPanel() {
                         onChange={(v) => updateParam(item.instanceId, p.key, v)}
                       />
                     ))}
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+              )
+            )}
+          </div>
         </div>
       )}
     </aside>
+  );
+}
+
+function SectionHeader({ label, icon: Icon }: { label: string; icon: typeof Type }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-accent-600 dark:text-accent-400">
+      <Icon size={11} />
+      {label}
+    </div>
   );
 }

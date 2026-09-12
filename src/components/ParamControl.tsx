@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ParamDef } from '../types';
 import clsx from 'clsx';
+import ColorWheelControl from './ColorWheel';
 
 interface Props {
   def: ParamDef;
@@ -9,12 +10,37 @@ interface Props {
 }
 
 export default function ParamControl({ def, value, onChange }: Props) {
+  if (def.type === 'color') {
+    return <ColorWheelControl def={def} value={value} onChange={onChange} />;
+  }
+
   if (def.type === 'select') {
+    const options = def.options ?? [];
+
+    if (options.length > 4) {
+      return (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">{def.label}</span>
+          <select
+            value={value}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            className="rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 text-[11px] text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-accent-400"
+          >
+            {options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col gap-1.5">
         <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">{def.label}</span>
         <div className="grid grid-flow-col auto-cols-fr gap-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.06] p-1">
-          {def.options?.map((opt) => (
+          {options.map((opt) => (
             <button
               key={opt.value}
               onClick={() => onChange(opt.value)}

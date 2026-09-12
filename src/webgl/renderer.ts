@@ -1,4 +1,9 @@
-import { VERTEX_SHADER, IDENTITY_FRAGMENT_SHADER } from '../shaders/common';
+import {
+  VERTEX_SHADER,
+  IDENTITY_FRAGMENT_SHADER,
+  UNIVERSAL_FX_FRAGMENT_SHADER,
+  MASK_COMPOSITE_FRAGMENT_SHADER,
+} from '../shaders/common';
 import type { ShaderDef, StackItem } from '../types';
 
 interface CompiledProgram {
@@ -14,6 +19,15 @@ interface RenderTarget {
   height: number;
 }
 
+interface MaskEntry {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  texture: WebGLTexture;
+  dirty: boolean;
+}
+
+const PINGPONG_SLOTS = 3;
+
 export interface RenderOptions {
   width: number;
   height: number;
@@ -28,8 +42,11 @@ export class GLRenderer {
   private sourceTexture: WebGLTexture | null = null;
   private sourceWidth = 0;
   private sourceHeight = 0;
-  private pingpong: [RenderTarget | null, RenderTarget | null] = [null, null];
+  private pingpong: (RenderTarget | null)[] = new Array(PINGPONG_SLOTS).fill(null);
   private identityProgram: CompiledProgram;
+  private universalFxProgram: CompiledProgram;
+  private maskCompositeProgram: CompiledProgram;
+  private masks = new Map<string, MaskEntry>();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -53,6 +70,8 @@ export class GLRenderer {
     );
 
     this.identityProgram = this.compileProgram('__identity__', IDENTITY_FRAGMENT_SHADER);
+    this.universalFxProgram = this.compileProgram('__universalfx__', UNIVERSAL_FX_FRAGMENT_SHADER);
+    this.maskCompositeProgram = this.compileProgram('__maskcomposite__', MASK_COMPOSITE_FRAGMENT_SHADER);
   }
 
   getGL() {
@@ -184,7 +203,7 @@ export class GLRenderer {
 
   private ensurePingPong(width: number, height: number) {
     const gl = this.gl;
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < PINGPONG_SLOTS; i++) {
       const existing = this.pingpong[i];
       if (!existing || existing.width !== width || existing.height !== height) {
         if (existing) {
@@ -194,6 +213,14 @@ export class GLRenderer {
         this.pingpong[i] = this.createRenderTarget(width, height);
       }
     }
+  }
+
+  /** Pick a ping-pong slot index not in `exclude` (used so a pass never reads and writes the same buffer). */
+  private pickSlot(exclude: number[]): number {
+    for (let i = 0; i < PINGPONG_SLOTS; i++) {
+      if (!exclude.includes(i)) return i;
+    }
+    throw new Error('No free ping-pong slot.');
   }
 
   private drawQuad(prog: CompiledProgram) {
@@ -217,6 +244,90 @@ export class GLRenderer {
     for (const [key, value] of Object.entries(params)) {
       const loc = prog.uniforms[`u_${key}`];
       if (loc) gl.uniform1f(loc, value);
+    }
+  }
+
+  private createMaskTexture(): WebGLTexture {
+    const gl = this.gl;
+    const texture = gl.createTexture();
+    if (!texture) throw new Error('Failed to create mask texture.');
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    return texture;
+  }
+
+  private getOrCreateMask(instanceId: string): MaskEntry {
+    let entry = this.masks.get(instanceId);
+    if (!entry) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, this.sourceWidth || 512);
+      canvas.height = Math.max(1, this.sourceHeight || 512);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Failed to create mask 2D context.');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      entry = { canvas, ctx, texture: this.createMaskTexture(), dirty: true };
+      this.masks.set(instanceId, entry);
+    }
+    return entry;
+  }
+
+  /**
+   * Paint one soft brush dab at normalized image position (u, v). radiusFrac is a fraction of the
+   * mask's width. opacity (0-1) is the dab's peak strength — lower values build up more gradually
+   * as strokes overlap instead of snapping straight to fully erased/added.
+   */
+  paintMask(instanceId: string, u: number, v: number, radiusFrac: number, erase: boolean, opacity = 0.85) {
+    const entry = this.getOrCreateMask(instanceId);
+    const { canvas, ctx } = entry;
+    const x = u * canvas.width;
+    const y = v * canvas.height;
+    const r = Math.max(1, radiusFrac * canvas.width);
+    const color = erase ? '0,0,0' : '255,255,255';
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `rgba(${color},${Math.max(0, Math.min(1, opacity))})`);
+    grad.addColorStop(1, `rgba(${color},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    entry.dirty = true;
+  }
+
+  /** Fill a stack item's whole mask with a single value: 1 = fully visible, 0 = fully hidden. */
+  clearMask(instanceId: string, value: 0 | 1) {
+    const entry = this.getOrCreateMask(instanceId);
+    entry.ctx.fillStyle = value === 1 ? '#fff' : '#000';
+    entry.ctx.fillRect(0, 0, entry.canvas.width, entry.canvas.height);
+    entry.dirty = true;
+  }
+
+  private uploadMasksIfDirty() {
+    const gl = this.gl;
+    let any = false;
+    for (const entry of this.masks.values()) {
+      if (!entry.dirty) continue;
+      any = true;
+      gl.bindTexture(gl.TEXTURE_2D, entry.texture);
+      // Match the same UNPACK_FLIP_Y_WEBGL orientation used for the source image in setImage(),
+      // so a painted mask lines up with the rendered image instead of being mirrored vertically.
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, entry.canvas);
+      entry.dirty = false;
+    }
+    if (any) gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  }
+
+  private pruneMasks(stack: StackItem[]) {
+    const ids = new Set(stack.map((i) => i.instanceId));
+    for (const [instanceId, entry] of this.masks) {
+      if (!ids.has(instanceId)) {
+        this.gl.deleteTexture(entry.texture);
+        this.masks.delete(instanceId);
+      }
     }
   }
 
@@ -253,9 +364,11 @@ export class GLRenderer {
     }
 
     this.ensurePingPong(width, height);
+    this.pruneMasks(stack);
+    this.uploadMasksIfDirty();
 
     let inputTexture = this.sourceTexture;
-    let pingIndex = 0;
+    let inputSlot = -1; // -1 means "the persistent source texture", not a pool slot
 
     for (let i = 0; i < enabled.length; i++) {
       const item = enabled[i];
@@ -271,15 +384,14 @@ export class GLRenderer {
         prog = this.identityProgram;
       }
 
-      if (isLast) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.viewport(0, 0, width, height);
-      } else {
-        const target = this.pingpong[pingIndex]!;
-        gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
-        gl.viewport(0, 0, width, height);
-      }
+      const originalInputTexture = inputTexture;
+      const originalInputSlot = inputSlot;
 
+      // Pass A: the shader's own effect, into a ping-pong slot distinct from its own input.
+      const aSlot = this.pickSlot(originalInputSlot >= 0 ? [originalInputSlot] : []);
+      const afterShader = this.pingpong[aSlot]!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, afterShader.framebuffer);
+      gl.viewport(0, 0, width, height);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, inputTexture);
       gl.useProgram(prog.program);
@@ -287,10 +399,51 @@ export class GLRenderer {
       this.setParamUniforms(prog, item.params);
       this.drawQuad(prog);
 
-      if (!isLast) {
-        inputTexture = this.pingpong[pingIndex]!.texture;
-        pingIndex = 1 - pingIndex;
+      let currentTexture = afterShader.texture;
+      let currentSlot = aSlot;
+
+      // Pass A2 (optional): composite the effect back over its original input using this item's painted mask.
+      const maskEntry = this.masks.get(item.instanceId);
+      if (maskEntry) {
+        const exclude = originalInputSlot >= 0 ? [originalInputSlot, aSlot] : [aSlot];
+        const mSlot = this.pickSlot(exclude);
+        const maskTarget = this.pingpong[mSlot]!;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, maskTarget.framebuffer);
+        gl.viewport(0, 0, width, height);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, currentTexture);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, originalInputTexture);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, maskEntry.texture);
+        gl.useProgram(this.maskCompositeProgram.program);
+        this.setCommonUniforms(this.maskCompositeProgram, width, height, time, 0);
+        if (this.maskCompositeProgram.uniforms['u_base']) gl.uniform1i(this.maskCompositeProgram.uniforms['u_base'], 1);
+        if (this.maskCompositeProgram.uniforms['u_mask']) gl.uniform1i(this.maskCompositeProgram.uniforms['u_mask'], 2);
+        this.drawQuad(this.maskCompositeProgram);
+
+        currentTexture = maskTarget.texture;
+        currentSlot = mSlot;
       }
+
+      // Pass B: universal Color/Light post-process, to the screen if this is the last item.
+      if (isLast) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, width, height);
+      } else {
+        const bSlot = this.pickSlot([currentSlot]);
+        const target = this.pingpong[bSlot]!;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
+        gl.viewport(0, 0, width, height);
+        inputTexture = target.texture;
+        inputSlot = bSlot;
+      }
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, currentTexture);
+      gl.useProgram(this.universalFxProgram.program);
+      this.setCommonUniforms(this.universalFxProgram, width, height, time, 0);
+      this.setParamUniforms(this.universalFxProgram, item.params);
+      this.drawQuad(this.universalFxProgram);
     }
   }
 
@@ -315,6 +468,8 @@ export class GLRenderer {
         gl.deleteTexture(t.texture);
       }
     });
+    this.masks.forEach((entry) => gl.deleteTexture(entry.texture));
+    this.masks.clear();
     gl.deleteBuffer(this.quadBuffer);
   }
 }
