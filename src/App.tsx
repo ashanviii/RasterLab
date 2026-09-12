@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import Sidebar from './components/Sidebar';
 import RightPanel from './components/RightPanel';
 import Canvas from './components/Canvas';
@@ -105,6 +106,7 @@ export default function App() {
         </div>
       </div>
       <Analytics />
+      <SpeedInsights />
     </RendererContext.Provider>
   );
 }
