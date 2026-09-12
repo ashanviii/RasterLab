@@ -14,6 +14,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@imgly/background-removal": "^1.7.0",
     "@supabase/supabase-js": "2.49.8",
+    "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
     "gifenc": "^1.0.3",
     "lucide-react": "^0.462.0",

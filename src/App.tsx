@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import Sidebar from './components/Sidebar';
 import RightPanel from './components/RightPanel';
 import Canvas from './components/Canvas';
@@ -103,6 +104,7 @@ export default function App() {
           <RightPanel />
         </div>
       </div>
+      <Analytics />
     </RendererContext.Provider>
   );
 }
