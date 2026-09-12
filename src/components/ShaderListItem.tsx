@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { ShaderDef } from '../types';
+import { ensureThumbnail, getCachedThumbnail, subscribeThumbnails, thumbnailCacheKey } from '../lib/shaderThumbnails';
 
 interface Props {
   def: ShaderDef;
@@ -8,17 +10,30 @@ interface Props {
 }
 
 export default function ShaderListItem({ def, onAdd, onClick }: Props) {
+  const cacheKey = thumbnailCacheKey(def);
+  const [thumbnail, setThumbnail] = useState(() => getCachedThumbnail(cacheKey));
+
+  useEffect(() => {
+    setThumbnail(getCachedThumbnail(cacheKey));
+    const unsubscribe = subscribeThumbnails(() => setThumbnail(getCachedThumbnail(cacheKey)));
+    ensureThumbnail(def);
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
+
   return (
     <div
       onClick={onClick}
-      className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-black/[0.035] dark:hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer"
+      className="group flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-black/[0.035] dark:hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer"
     >
       <div
-        className={`h-9 w-9 shrink-0 rounded-lg bg-gradient-to-br ${def.thumbnail} shadow-inner ring-1 ring-black/5 dark:ring-white/10`}
-      />
+        className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${def.thumbnail} shadow-inner ring-1 ring-black/5 dark:ring-white/10`}
+      >
+        {thumbnail && <img src={thumbnail} alt="" draggable={false} className="h-full w-full object-cover" />}
+      </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-medium text-neutral-800 dark:text-neutral-100">{def.name}</div>
-        <div className="truncate text-[11px] text-neutral-400 dark:text-neutral-500">{def.category}</div>
+        <div className="truncate text-[13.5px] font-medium text-neutral-800 dark:text-neutral-100">{def.name}</div>
+        <div className="truncate text-[11.5px] text-neutral-400 dark:text-neutral-500">{def.category}</div>
       </div>
       <button
         onClick={(e) => {

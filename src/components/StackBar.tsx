@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
-import { Copy, GripVertical, Layers, RotateCcw, Trash2, X } from 'lucide-react';
+import { Copy, GripVertical, Layers, RotateCcw, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { StackItem } from '../types';
 

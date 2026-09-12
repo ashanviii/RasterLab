@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { PresetDef, ShaderCategory, ShaderDef, StackItem } from '../types';
-import { BUILTIN_SHADERS, SHADER_MAP } from '../shaders/registry';
+import { SHADER_MAP } from '../shaders/registry';
 import { CUSTOM_SHADER_TEMPLATE } from '../shaders/common';
 import { removeImageBackground } from '../lib/backgroundRemoval';
 
@@ -18,13 +18,22 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function loadImageElement(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
 function defaultParams(def: ShaderDef): Record<string, number> {
   const out: Record<string, number> = {};
   for (const p of def.params) out[p.key] = p.default;
   return out;
 }
 
-interface RasterLabState {
+interface StencilState {
   // image
   image: LoadedImage | null;
   originalImage: LoadedImage | null;
@@ -33,6 +42,7 @@ interface RasterLabState {
   isBackgroundRemoved: boolean;
   backgroundRemovalError: string | null;
   setImage: (file: File) => Promise<void>;
+  setImageFromUrl: (url: string, name: string) => Promise<void>;
   clearImage: () => void;
   removeBackground: () => Promise<void>;
   restoreOriginalBackground: () => void;
@@ -78,10 +88,9 @@ interface RasterLabState {
   setZoom: (z: number | ((z: number) => number)) => void;
 
   allShaderDefs: () => Record<string, ShaderDef>;
-  getSelectedItem: () => StackItem | null;
 }
 
-export const useStore = create<RasterLabState>((set, get) => ({
+export const useStore = create<StencilState>((set, get) => ({
   image: null,
   originalImage: null,
   isLoadingImage: false,
@@ -91,15 +100,26 @@ export const useStore = create<RasterLabState>((set, get) => ({
 
   setImage: async (file: File) => {
     set({ isLoadingImage: true });
-    const url = URL.createObjectURL(file);
     try {
-      const element = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = url;
-      });
+      const element = await loadImageElement(URL.createObjectURL(file));
       const loaded: LoadedImage = { element, width: element.naturalWidth, height: element.naturalHeight, name: file.name };
+      set({
+        image: loaded,
+        originalImage: loaded,
+        isLoadingImage: false,
+        isBackgroundRemoved: false,
+        backgroundRemovalError: null,
+      });
+    } catch {
+      set({ isLoadingImage: false });
+    }
+  },
+
+  setImageFromUrl: async (url: string, name: string) => {
+    set({ isLoadingImage: true });
+    try {
+      const element = await loadImageElement(url);
+      const loaded: LoadedImage = { element, width: element.naturalWidth, height: element.naturalHeight, name };
       set({
         image: loaded,
         originalImage: loaded,
@@ -292,7 +312,4 @@ export const useStore = create<RasterLabState>((set, get) => ({
   setZoom: (z) => set((s) => ({ zoom: typeof z === 'function' ? z(s.zoom) : z })),
 
   allShaderDefs: () => ({ ...SHADER_MAP, ...Object.fromEntries(get().customShaders.map((d) => [d.id, d])) }),
-  getSelectedItem: () => get().stack.find((i) => i.instanceId === get().selectedInstanceId) ?? null,
 }));
-
-export { BUILTIN_SHADERS };

@@ -6,17 +6,17 @@ export default {
     extend: {
       colors: {
         accent: {
-          DEFAULT: '#8b7ff5',
-          50: '#f4f2fe',
-          100: '#ebe8fd',
-          200: '#d8d2fb',
-          300: '#bcb0f7',
-          400: '#9c88f2',
-          500: '#8b7ff5',
-          600: '#6f5ce8',
-          700: '#5d47cf',
-          800: '#4c3aa8',
-          900: '#403285',
+          DEFAULT: '#6a9fe3',
+          50: '#f2f7fe',
+          100: '#e6eefd',
+          200: '#c9defb',
+          300: '#a3c7f7',
+          400: '#7eaeea',
+          500: '#6a9fe3',
+          600: '#5484c9',
+          700: '#446ba3',
+          800: '#3a5883',
+          900: '#334a6c',
         },
       },
       fontFamily: {

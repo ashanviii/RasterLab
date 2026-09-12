@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Maximize2, Minimize2, RefreshCcw, UploadCloud, Wand2, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  Image as ImageIcon,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  RefreshCcw,
+  UploadCloud,
+  Wand2,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { useStore, type ViewMode } from '../store/useStore';
 import { GLRenderer } from '../webgl/renderer';
 import { getFragmentSource } from '../lib/fragmentSource';
 import { timeRef } from '../lib/timeRef';
+import { SAMPLE_IMAGES, type SampleImage } from '../lib/sampleImages';
 
 interface Props {
   onRendererReady: (r: GLRenderer) => void;
@@ -20,6 +31,7 @@ export default function Canvas({ onRendererReady }: Props) {
   const image = useStore((s) => s.image);
   const isLoadingImage = useStore((s) => s.isLoadingImage);
   const setImage = useStore((s) => s.setImage);
+  const setImageFromUrl = useStore((s) => s.setImageFromUrl);
   const viewMode = useStore((s) => s.viewMode);
   const setViewMode = useStore((s) => s.setViewMode);
   const splitPosition = useStore((s) => s.splitPosition);
@@ -183,29 +195,44 @@ export default function Canvas({ onRendererReady }: Props) {
       />
 
       {!image && (
-        <div
-          className={clsx(
-            'flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-16 py-20 text-center transition-colors duration-200',
-            isDragOver
-              ? 'border-accent-400 bg-accent-500/5'
-              : 'border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20'
-          )}
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/[0.04] dark:bg-white/[0.06]">
-            <UploadCloud size={20} className="text-neutral-400" />
-          </div>
-          <div>
-            <p className="text-[13.5px] font-medium text-neutral-700 dark:text-neutral-200">
-              {isLoadingImage ? 'Loading image…' : 'Drop an image here'}
-            </p>
-            <p className="mt-0.5 text-[12px] text-neutral-400">or click below to browse your files</p>
-          </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="mt-1 rounded-full bg-neutral-900 dark:bg-white px-4 py-1.5 text-[12px] font-medium text-white dark:text-neutral-900 hover:opacity-90 transition-opacity"
+        <div className="flex flex-col items-center gap-5">
+          <div
+            className={clsx(
+              'flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-16 py-20 text-center transition-colors duration-200',
+              isDragOver
+                ? 'border-accent-400 bg-accent-500/5'
+                : 'border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20'
+            )}
           >
-            Upload Image
-          </button>
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/[0.04] dark:bg-white/[0.06]">
+              <UploadCloud size={20} className="text-neutral-400" />
+            </div>
+            <div>
+              <p className="text-[13.5px] font-medium text-neutral-700 dark:text-neutral-200">
+                {isLoadingImage ? 'Loading image…' : 'Drop an image here'}
+              </p>
+              <p className="mt-0.5 text-[12px] text-neutral-400">or click below to browse your files</p>
+            </div>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-1 rounded-full bg-neutral-900 dark:bg-white px-4 py-1.5 text-[12px] font-medium text-white dark:text-neutral-900 hover:opacity-90 transition-opacity"
+            >
+              Upload Image
+            </button>
+          </div>
+
+          <div className="flex flex-col items-center gap-2.5">
+            <p className="text-[11.5px] text-neutral-400">No image? Try one of these</p>
+            <div className="flex gap-2">
+              {SAMPLE_IMAGES.map((sample) => (
+                <SampleThumb
+                  key={sample.id}
+                  sample={sample}
+                  onSelect={() => setImageFromUrl(sample.src, sample.name)}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -213,8 +240,8 @@ export default function Canvas({ onRendererReady }: Props) {
       <div
         ref={frameRef}
         className={clsx(
-          'relative select-none overflow-hidden rounded-xl shadow-[0_1px_1px_rgba(0,0,0,0.04),0_20px_40px_-16px_rgba(0,0,0,0.25)] ring-1 ring-black/5 dark:ring-white/10',
-          !image && 'invisible absolute'
+          'select-none overflow-hidden rounded-xl shadow-[0_1px_1px_rgba(0,0,0,0.04),0_20px_40px_-16px_rgba(0,0,0,0.25)] ring-1 ring-black/5 dark:ring-white/10',
+          image ? 'relative' : 'invisible absolute inset-0 m-auto'
         )}
         style={{ width: cssW, height: cssH }}
       >
@@ -358,6 +385,32 @@ function ToolbarIconButton({
       )}
     >
       {children}
+    </button>
+  );
+}
+
+function SampleThumb({ sample, onSelect }: { sample: SampleImage; onSelect: () => void }) {
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <button
+      onClick={onSelect}
+      title={sample.name}
+      className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl ring-1 ring-black/10 dark:ring-white/10 transition-transform duration-150 hover:scale-105 hover:ring-accent-400/60"
+    >
+      {!failed ? (
+        <img
+          src={sample.src}
+          alt={sample.name}
+          draggable={false}
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800">
+          <ImageIcon size={16} className="text-neutral-400" />
+        </div>
+      )}
     </button>
   );
 }
