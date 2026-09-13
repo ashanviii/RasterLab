@@ -35,7 +35,13 @@ function loadImageElement(src: string): Promise<HTMLImageElement> {
 
 function defaultParams(def: ShaderDef): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const p of def.params) out[p.key] = p.default;
+  for (const p of def.params) if (p.type !== 'text') out[p.key] = p.default;
+  return out;
+}
+
+function defaultTextParams(def: ShaderDef): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of def.params) if (p.type === 'text') out[p.key] = p.defaultText ?? '';
   return out;
 }
 
@@ -63,7 +69,9 @@ interface StencilState {
   selectStackItem: (instanceId: string | null) => void;
   setStackOrder: (instanceIds: string[]) => void;
   updateParam: (instanceId: string, key: string, value: number) => void;
+  updateTextParam: (instanceId: string, key: string, value: string) => void;
   resetStackItemParams: (instanceId: string) => void;
+  applyQuickPreset: (instanceId: string, values: Record<string, number>) => void;
   clearStack: () => void;
 
   // presets
@@ -183,7 +191,13 @@ export const useStore = create<StencilState>((set, get) => ({
   addShaderToStack: (shaderId) => {
     const def = get().allShaderDefs()[shaderId];
     if (!def) return;
-    const item: StackItem = { instanceId: uid(), shaderId, enabled: true, params: defaultParams(def) };
+    const item: StackItem = {
+      instanceId: uid(),
+      shaderId,
+      enabled: true,
+      params: defaultParams(def),
+      textParams: defaultTextParams(def),
+    };
     set((s) => ({ stack: [...s.stack, item], selectedInstanceId: item.instanceId }));
   },
 
@@ -203,7 +217,12 @@ export const useStore = create<StencilState>((set, get) => ({
     set((s) => {
       const idx = s.stack.findIndex((i) => i.instanceId === instanceId);
       if (idx === -1) return s;
-      const clone: StackItem = { ...s.stack[idx], instanceId: uid(), params: { ...s.stack[idx].params } };
+      const clone: StackItem = {
+        ...s.stack[idx],
+        instanceId: uid(),
+        params: { ...s.stack[idx].params },
+        textParams: { ...s.stack[idx].textParams },
+      };
       const stack = [...s.stack];
       stack.splice(idx + 1, 0, clone);
       return { stack, selectedInstanceId: clone.instanceId };
@@ -225,6 +244,13 @@ export const useStore = create<StencilState>((set, get) => ({
       ),
     })),
 
+  updateTextParam: (instanceId, key, value) =>
+    set((s) => ({
+      stack: s.stack.map((i) =>
+        i.instanceId === instanceId ? { ...i, textParams: { ...i.textParams, [key]: value } } : i
+      ),
+    })),
+
   resetStackItemParams: (instanceId) =>
     set((s) => {
       const item = s.stack.find((i) => i.instanceId === instanceId);
@@ -232,7 +258,23 @@ export const useStore = create<StencilState>((set, get) => ({
       const def = get().allShaderDefs()[item.shaderId];
       if (!def) return s;
       return {
-        stack: s.stack.map((i) => (i.instanceId === instanceId ? { ...i, params: defaultParams(def) } : i)),
+        stack: s.stack.map((i) =>
+          i.instanceId === instanceId
+            ? { ...i, params: defaultParams(def), textParams: defaultTextParams(def) }
+            : i
+        ),
+      };
+    }),
+
+  applyQuickPreset: (instanceId, values) =>
+    set((s) => {
+      const item = s.stack.find((i) => i.instanceId === instanceId);
+      if (!item) return s;
+      const def = get().allShaderDefs()[item.shaderId];
+      if (!def) return s;
+      const params = { ...defaultParams(def), ...values };
+      return {
+        stack: s.stack.map((i) => (i.instanceId === instanceId ? { ...i, params } : i)),
       };
     }),
 
@@ -247,6 +289,7 @@ export const useStore = create<StencilState>((set, get) => ({
         shaderId: s.shaderId,
         enabled: true,
         params: { ...defaultParams(defs[s.shaderId]), ...s.params },
+        textParams: defaultTextParams(defs[s.shaderId]),
       }));
     set({ stack, selectedInstanceId: stack.length ? stack[0].instanceId : null, activeTab: 'effects' });
   },

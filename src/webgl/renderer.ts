@@ -5,6 +5,7 @@ import {
   MASK_COMPOSITE_FRAGMENT_SHADER,
 } from '../shaders/common';
 import type { ShaderDef, StackItem } from '../types';
+import { resolveCharacterList } from '../lib/charsets';
 
 interface CompiledProgram {
   program: WebGLProgram;
@@ -24,6 +25,11 @@ interface MaskEntry {
   ctx: CanvasRenderingContext2D;
   texture: WebGLTexture;
   dirty: boolean;
+}
+
+interface CharsetAtlasEntry {
+  texture: WebGLTexture;
+  count: number;
 }
 
 const PINGPONG_SLOTS = 3;
@@ -47,6 +53,7 @@ export class GLRenderer {
   private universalFxProgram: CompiledProgram;
   private maskCompositeProgram: CompiledProgram;
   private masks = new Map<string, MaskEntry>();
+  private charsetAtlases = new Map<string, CharsetAtlasEntry>();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -331,6 +338,56 @@ export class GLRenderer {
     }
   }
 
+  /**
+   * Renders a horizontal strip of characters (one cell per glyph) into a texture, sampled by the
+   * ASCII Art shader's luminance-bucket index. Cached by the exact character sequence so switching
+   * back to a previously-used charset (e.g. toggling Character Set) doesn't re-render it.
+   */
+  private getOrCreateCharsetAtlas(chars: string[]): CharsetAtlasEntry {
+    const key = chars.join(' ');
+    const existing = this.charsetAtlases.get(key);
+    if (existing) return existing;
+
+    const gl = this.gl;
+    const cell = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = cell * chars.length;
+    canvas.height = cell;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to create charset atlas 2D context.');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${Math.floor(cell * 0.72)}px monospace`;
+    chars.forEach((ch, i) => ctx.fillText(ch, i * cell + cell / 2, cell / 2 + 1));
+
+    const texture = gl.createTexture();
+    if (!texture) throw new Error('Failed to create charset atlas texture.');
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    // Match the orientation convention used for the source image / masks so v=0 is the same edge.
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+
+    const entry: CharsetAtlasEntry = { texture, count: chars.length };
+    this.charsetAtlases.set(key, entry);
+    return entry;
+  }
+
+  private pruneCharsetAtlases(neededKeys: Set<string>) {
+    for (const [key, entry] of this.charsetAtlases) {
+      if (!neededKeys.has(key)) {
+        this.gl.deleteTexture(entry.texture);
+        this.charsetAtlases.delete(key);
+      }
+    }
+  }
+
   render(
     stack: StackItem[],
     shaderDefs: Record<string, ShaderDef>,
@@ -367,6 +424,16 @@ export class GLRenderer {
     this.pruneMasks(stack);
     this.uploadMasksIfDirty();
 
+    const neededCharsetKeys = new Set<string>();
+    for (const item of enabled) {
+      const def = shaderDefs[item.shaderId];
+      if (def.usesCharsetAtlas) {
+        const chars = resolveCharacterList(item.params.characterSet ?? 0, item.textParams?.customChars);
+        neededCharsetKeys.add(chars.join(' '));
+      }
+    }
+    this.pruneCharsetAtlases(neededCharsetKeys);
+
     let inputTexture = this.sourceTexture;
     let inputSlot = -1; // -1 means "the persistent source texture", not a pool slot
 
@@ -397,6 +464,14 @@ export class GLRenderer {
       gl.useProgram(prog.program);
       this.setCommonUniforms(prog, width, height, time, 0);
       this.setParamUniforms(prog, item.params);
+      if (def.usesCharsetAtlas) {
+        const chars = resolveCharacterList(item.params.characterSet ?? 0, item.textParams?.customChars);
+        const atlas = this.getOrCreateCharsetAtlas(chars);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, atlas.texture);
+        if (prog.uniforms['u_charsetAtlas']) gl.uniform1i(prog.uniforms['u_charsetAtlas'], 1);
+        if (prog.uniforms['u_charsetCount']) gl.uniform1f(prog.uniforms['u_charsetCount'], atlas.count);
+      }
       this.drawQuad(prog);
 
       let currentTexture = afterShader.texture;
@@ -470,6 +545,8 @@ export class GLRenderer {
     });
     this.masks.forEach((entry) => gl.deleteTexture(entry.texture));
     this.masks.clear();
+    this.charsetAtlases.forEach((entry) => gl.deleteTexture(entry.texture));
+    this.charsetAtlases.clear();
     gl.deleteBuffer(this.quadBuffer);
   }
 }

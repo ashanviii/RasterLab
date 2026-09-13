@@ -1,5 +1,10 @@
 import type { ShaderDef } from '../types';
 import { buildFragmentShader } from './common';
+import { CHARACTER_SET_OPTIONS, BUILTIN_CHARSETS } from '../lib/charsets';
+import { UNIVERSAL_PARAMS } from './universalParams';
+
+/** Reuses the same 17 blend modes offered by the universal Color/Tint control, for the ASCII overlay compositor. */
+const BLEND_MODE_OPTIONS = UNIVERSAL_PARAMS.find((p) => p.key === 'colorBlendMode')!.options!;
 
 export const BUILTIN_SHADERS: ShaderDef[] = [
   {
@@ -557,10 +562,33 @@ uniform float u_contrast;
     id: 'ascii-art',
     name: 'ASCII Art',
     category: 'ASCII',
-    description: 'Luminance-mapped terminal glyphs in place of pixels.',
+    description: 'Real typed characters mapped to image luminance, via a live character-atlas texture.',
     thumbnail: 'from-emerald-300 via-emerald-600 to-neutral-950',
+    usesCharsetAtlas: true,
+    quickPresets: [
+      { name: 'Classic', values: { characterSet: 0, colorMode: 0, background: 0, animStyle: 0, invert: 0, contrast: 1.1, density: 0.3 } },
+      { name: 'Terminal', values: { characterSet: 0, colorMode: 2, background: 0, animStyle: 0, contrast: 1.15 } },
+      { name: 'Matrix', values: { characterSet: 1, colorMode: 2, background: 0, animStyle: 1, animSpeed: 2.2, animAmount: 0.8, animRandomness: 0.7, invert: 1 } },
+      { name: 'Retro', values: { characterSet: 1, colorMode: 1, contrast: 1.2, density: 0.4, tintColor: 16757575, tintAmount: 0.35, colorBlendMode: 9 } },
+      { name: 'High Contrast', values: { threshold: 0.35, contrast: 1.6, gamma: 0.75, blackPoint: 0.08, whitePoint: 0.92, sharpness: 0.5, coverage: 1 } },
+      { name: 'Overlay', values: { renderMode: 1, colorSource: 1, overlayColor: 16777215, overlayBlendMode: 5, overlayOpacity: 0.6, characterSet: 0, cellSize: 10 } },
+    ],
     params: [
-      { key: 'cellSize', label: 'Font Size', type: 'float', default: 12, min: 4, max: 40, step: 1, group: 'Character Options' },
+      // Character
+      {
+        key: 'renderMode',
+        label: 'Render Mode',
+        type: 'select',
+        default: 0,
+        options: [
+          { label: 'Full ASCII', value: 0 },
+          { label: 'Overlay', value: 1 },
+        ],
+        group: 'Character',
+      },
+      { key: 'cellSize', label: 'Font Size', type: 'float', default: 12, min: 4, max: 40, step: 1, group: 'Character' },
+      { key: 'characterSet', label: 'Character Set', type: 'select', default: 0, options: CHARACTER_SET_OPTIONS, group: 'Character' },
+      { key: 'customChars', label: 'Custom Characters', type: 'text', default: 0, defaultText: BUILTIN_CHARSETS.ASCII, group: 'Character', visibleWhen: { key: 'characterSet', equals: 3 } },
       {
         key: 'colorMode',
         label: 'Mode',
@@ -571,20 +599,113 @@ uniform float u_contrast;
           { label: 'Color', value: 1 },
           { label: 'Terminal', value: 2 },
         ],
-        group: 'Character Options',
+        group: 'Character',
+        visibleWhen: { key: 'renderMode', equals: 0 },
       },
-      { key: 'charOpacity', label: 'Char Opacity', type: 'float', default: 1, min: 0, max: 1, step: 0.01, group: 'Character Options' },
-      { key: 'invert', label: 'Invert Mapping', type: 'bool', default: 0, group: 'Character Options' },
-      { key: 'dotGridOverlay', label: 'Dot Grid Overlay', type: 'bool', default: 0, group: 'Character Options' },
-      { key: 'randomizeChars', label: 'Randomize Characters', type: 'bool', default: 0, group: 'Character Options' },
+      { key: 'charOpacity', label: 'Char Opacity', type: 'float', default: 1, min: 0, max: 1, step: 0.01, group: 'Character', visibleWhen: { key: 'renderMode', equals: 0 } },
+      { key: 'charSpacing', label: 'Character Spacing', type: 'float', default: 0, min: 0, max: 0.7, step: 0.01, group: 'Character' },
+      { key: 'aspectCorrection', label: 'Aspect Ratio Correction', type: 'float', default: 1, min: 0.4, max: 2.5, step: 0.05, group: 'Character' },
+      { key: 'invert', label: 'Invert Mapping', type: 'bool', default: 0, group: 'Character' },
+      { key: 'dotGridOverlay', label: 'Dot Grid Overlay', type: 'bool', default: 0, group: 'Character' },
+      { key: 'randomizeChars', label: 'Randomize Characters', type: 'bool', default: 0, group: 'Character' },
 
+      // Overlay (only relevant when Render Mode = Overlay)
+      { key: 'overlayOpacity', label: 'Opacity', type: 'float', default: 0.65, min: 0, max: 1, step: 0.01, group: 'Overlay', visibleWhen: { key: 'renderMode', equals: 1 } },
+      { key: 'overlayBlendMode', label: 'Blend Mode', type: 'select', default: 5, options: BLEND_MODE_OPTIONS, group: 'Overlay', visibleWhen: { key: 'renderMode', equals: 1 } },
+      {
+        key: 'colorSource',
+        label: 'Color Source',
+        type: 'select',
+        default: 0,
+        options: [
+          { label: 'Original Image', value: 0 },
+          { label: 'Single Color', value: 1 },
+          { label: 'Custom Gradient', value: 2 },
+        ],
+        group: 'Overlay',
+        visibleWhen: { key: 'renderMode', equals: 1 },
+      },
+      {
+        key: 'overlayColor',
+        label: 'Character Color',
+        type: 'color',
+        default: 16777215,
+        group: 'Overlay',
+        visibleWhen: [{ key: 'renderMode', equals: 1 }, { key: 'colorSource', equals: 1 }],
+      },
+      {
+        key: 'overlayGradientStart',
+        label: 'Gradient Start',
+        type: 'color',
+        default: 0,
+        group: 'Overlay',
+        visibleWhen: [{ key: 'renderMode', equals: 1 }, { key: 'colorSource', equals: 2 }],
+      },
+      {
+        key: 'overlayGradientEnd',
+        label: 'Gradient End',
+        type: 'color',
+        default: 16777215,
+        group: 'Overlay',
+        visibleWhen: [{ key: 'renderMode', equals: 1 }, { key: 'colorSource', equals: 2 }],
+      },
+
+      // Intensity
       { key: 'coverage', label: 'Coverage', type: 'float', default: 1, min: 0, max: 1, step: 0.01, group: 'Intensity' },
-      { key: 'edgeEmphasis', label: 'Edge Emphasis', type: 'float', default: 0, min: 0, max: 1, step: 0.01, group: 'Intensity' },
       { key: 'density', label: 'Density', type: 'float', default: 0.3, min: 0, max: 1, step: 0.01, group: 'Intensity' },
       { key: 'brightness', label: 'Brightness', type: 'float', default: 1, min: 0, max: 2, step: 0.01, group: 'Intensity' },
       { key: 'contrast', label: 'Contrast', type: 'float', default: 1.1, min: 0, max: 2, step: 0.01, group: 'Intensity' },
 
-      { key: 'animated', label: 'Animated ASCII', type: 'bool', default: 0, group: 'Animation' },
+      // Image
+      { key: 'threshold', label: 'Threshold', type: 'float', default: 0, min: 0, max: 1, step: 0.01, group: 'Image' },
+      { key: 'gamma', label: 'Gamma', type: 'float', default: 1, min: 0.2, max: 3, step: 0.01, group: 'Image' },
+      { key: 'blackPoint', label: 'Black Point', type: 'float', default: 0, min: 0, max: 0.9, step: 0.01, group: 'Image' },
+      { key: 'whitePoint', label: 'White Point', type: 'float', default: 1, min: 0.1, max: 1, step: 0.01, group: 'Image' },
+      { key: 'edgeEmphasis', label: 'Edge Emphasis', type: 'float', default: 0, min: 0, max: 1, step: 0.01, group: 'Image' },
+      { key: 'sharpness', label: 'Sharpness', type: 'float', default: 0, min: 0, max: 1, step: 0.01, group: 'Image' },
+
+      // Animation
+      {
+        key: 'animStyle',
+        label: 'Style',
+        type: 'select',
+        default: 0,
+        options: [
+          { label: 'None', value: 0 },
+          { label: 'Jitter', value: 1 },
+          { label: 'Flicker', value: 2 },
+          { label: 'Wave', value: 3 },
+        ],
+        group: 'Animation',
+      },
+      { key: 'animSpeed', label: 'Speed', type: 'float', default: 1, min: 0, max: 5, step: 0.05, group: 'Animation', visibleWhen: { key: 'animStyle', equals: 1 } },
+      { key: 'animAmount', label: 'Amount', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, group: 'Animation', visibleWhen: { key: 'animStyle', equals: 1 } },
+      { key: 'animRandomness', label: 'Randomness', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, group: 'Animation', visibleWhen: { key: 'animStyle', equals: 1 } },
+      { key: 'animSeed', label: 'Seed', type: 'float', default: 0, min: 0, max: 100, step: 1, group: 'Animation', visibleWhen: { key: 'animStyle', equals: 1 } },
+      { key: 'animDirection', label: 'Direction', type: 'float', default: 0, min: 0, max: 360, step: 1, unit: '°', group: 'Animation', visibleWhen: { key: 'animStyle', equals: 3 } },
+
+      // Color
+      {
+        key: 'background',
+        label: 'Background',
+        type: 'select',
+        default: 0,
+        options: [
+          { label: 'Original', value: 0 },
+          { label: 'Transparent', value: 1 },
+          { label: 'Custom', value: 2 },
+        ],
+        group: 'Color',
+        visibleWhen: { key: 'renderMode', equals: 0 },
+      },
+      {
+        key: 'backgroundColor',
+        label: 'Background Color',
+        type: 'color',
+        default: 0,
+        group: 'Color',
+        visibleWhen: [{ key: 'renderMode', equals: 0 }, { key: 'background', equals: 2 }],
+      },
     ],
     fragmentShader: buildFragmentShader(
       `
@@ -593,101 +714,158 @@ uniform float u_contrast;
 uniform float u_colorMode;
 uniform float u_colorBlendMode;
 uniform float u_charOpacity;
+uniform float u_charSpacing;
+uniform float u_aspectCorrection;
 uniform float u_invert;
 uniform float u_dotGridOverlay;
 uniform float u_randomizeChars;
 uniform float u_coverage;
-uniform float u_edgeEmphasis;
 uniform float u_density;
 uniform float u_brightness;
-uniform float u_animated;
-
-float asciiLine(vec2 p, vec2 a, vec2 b, float thick) {
-  vec2 pa = p - a;
-  vec2 ba = b - a;
-  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-  float d = length(pa - ba * h);
-  return 1.0 - smoothstep(thick * 0.7, thick, d);
-}
-
-float asciiGlyph(vec2 p, float level) {
-  float thick = 0.09;
-  float ext = 0.34;
-  if (level < 0.5) {
-    return 0.0;
-  } else if (level < 1.5) {
-    return 1.0 - smoothstep(0.05, 0.09, length(p));
-  } else if (level < 2.5) {
-    float a = asciiLine(p, vec2(0.0, -ext), vec2(0.0, ext), thick);
-    float b = asciiLine(p, vec2(-ext, 0.0), vec2(ext, 0.0), thick);
-    return max(a, b);
-  } else if (level < 3.5) {
-    float a = asciiLine(p, vec2(0.0, -ext), vec2(0.0, ext), thick);
-    float b = asciiLine(p, vec2(-ext, 0.0), vec2(ext, 0.0), thick);
-    float c = asciiLine(p, vec2(-ext, -ext), vec2(ext, ext), thick * 0.85);
-    float d = asciiLine(p, vec2(-ext, ext), vec2(ext, -ext), thick * 0.85);
-    return max(max(a, b), max(c, d));
-  } else if (level < 4.5) {
-    float boxD = max(abs(p.x), abs(p.y));
-    return 1.0 - smoothstep(ext * 0.85, ext * 0.85 + 0.05, boxD);
-  } else {
-    float boxD = max(abs(p.x), abs(p.y));
-    return 1.0 - smoothstep(0.44, 0.49, boxD);
-  }
-}
+uniform float u_threshold;
+uniform float u_gamma;
+uniform float u_blackPoint;
+uniform float u_whitePoint;
+uniform float u_edgeEmphasis;
+uniform float u_sharpness;
+uniform float u_animStyle;
+uniform float u_animSpeed;
+uniform float u_animAmount;
+uniform float u_animRandomness;
+uniform float u_animSeed;
+uniform float u_animDirection;
+uniform float u_background;
+uniform float u_backgroundColor;
+uniform float u_renderMode;
+uniform float u_overlayOpacity;
+uniform float u_overlayBlendMode;
+uniform float u_colorSource;
+uniform float u_overlayColor;
+uniform float u_overlayGradientStart;
+uniform float u_overlayGradientEnd;
+uniform sampler2D u_charsetAtlas;
+uniform float u_charsetCount;
       `,
       `
   vec2 cell = max(vec2(1.0), vec2(u_cellSize));
-  vec2 cellId = floor(v_uv * u_resolution / cell);
-  vec2 cellUV = mod(v_uv * u_resolution, cell) / cell - 0.5;
-  vec2 sampleUV = (cellId + 0.5) * cell / u_resolution;
+  vec2 cellAdj = vec2(cell.x, cell.y * max(0.1, u_aspectCorrection));
+  vec2 cellId = floor(v_uv * u_resolution / cellAdj);
+  vec2 cellUV = mod(v_uv * u_resolution, cellAdj) / cellAdj - 0.5;
+  vec2 sampleUV = (cellId + 0.5) * cellAdj / u_resolution;
   vec4 src = texture2D(u_texture, sampleUV);
+  vec4 srcFull = texture2D(u_texture, v_uv);
 
   float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
 
-  if (u_edgeEmphasis > 0.001) {
-    vec2 stepUV = cell / u_resolution;
+  if (u_edgeEmphasis > 0.001 || u_sharpness > 0.001) {
+    vec2 stepUV = cellAdj / u_resolution;
     float lumR = dot(texture2D(u_texture, sampleUV + vec2(stepUV.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+    float lumL = dot(texture2D(u_texture, sampleUV - vec2(stepUV.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
     float lumD = dot(texture2D(u_texture, sampleUV + vec2(0.0, stepUV.y)).rgb, vec3(0.299, 0.587, 0.114));
-    float edge = abs(lum - lumR) + abs(lum - lumD);
-    lum = clamp(lum + edge * u_edgeEmphasis * 2.0, 0.0, 1.0);
+    float lumU = dot(texture2D(u_texture, sampleUV - vec2(0.0, stepUV.y)).rgb, vec3(0.299, 0.587, 0.114));
+    if (u_edgeEmphasis > 0.001) {
+      float edge = abs(lum - lumR) + abs(lum - lumD);
+      lum = clamp(lum + edge * u_edgeEmphasis * 2.0, 0.0, 1.0);
+    }
+    if (u_sharpness > 0.001) {
+      float avg = (lumL + lumR + lumU + lumD) * 0.25;
+      lum = clamp(lum + (lum - avg) * u_sharpness * 3.0, 0.0, 1.0);
+    }
   }
 
+  lum = pow(clamp(lum, 0.0001, 1.0), 1.0 / max(u_gamma, 0.05));
+  lum = clamp((lum - u_blackPoint) / max(u_whitePoint - u_blackPoint, 0.001), 0.0, 1.0);
   lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
   lum = clamp(lum + (lum - 0.5) * u_density * 1.5 + u_density * 0.15, 0.0, 1.0);
+
+  if (u_threshold > 0.001) {
+    lum = mix(lum, step(0.5, lum), u_threshold);
+  }
+
+  float flickerMul = 1.0;
+  if (u_animStyle > 2.5) {
+    float rad = radians(u_animDirection);
+    vec2 dir = vec2(cos(rad), sin(rad));
+    float phase = dot(cellId, dir) * 0.35 - u_time * (0.5 + u_animSpeed * 3.0);
+    lum = clamp(lum + sin(phase) * 0.5 * u_animAmount, 0.0, 1.0);
+  } else if (u_animStyle > 1.5) {
+    float t = floor(u_time * (2.0 + u_animSpeed * 8.0));
+    float r = hash12(cellId * 1.7 + t + u_animSeed);
+    if (r < 0.15 + u_animRandomness * u_animAmount) {
+      flickerMul = 0.15 + hash12(cellId + t * 1.3) * 0.5;
+    }
+  }
+
   if (u_invert > 0.5) lum = 1.0 - lum;
 
-  float levelF = lum * 5.999;
+  float levelF = lum * (u_charsetCount - 0.001);
+  if (u_animStyle > 0.5 && u_animStyle < 1.5) {
+    float t = floor(u_time * (2.0 + u_animSpeed * 6.0));
+    levelF += (hash12(cellId + t + u_animSeed) - 0.5) * 2.4 * u_animAmount;
+  }
   if (u_randomizeChars > 0.5) {
-    float t = u_animated > 0.5 ? floor(u_time * 6.0) : 0.0;
-    float jitter = (hash12(cellId + t) - 0.5) * 2.4;
-    levelF = clamp(levelF + jitter, 0.0, 5.999);
+    levelF += (hash12(cellId + 91.7) - 0.5) * 1.2;
   }
+  levelF = clamp(levelF, 0.0, u_charsetCount - 1.001);
   float level = floor(levelF);
-  float cov = asciiGlyph(cellUV, level) * u_coverage;
 
-  vec3 bg = vec3(0.03);
-  vec3 fg = vec3(0.92);
-  if (u_colorMode > 0.5 && u_colorMode < 1.5) {
-    fg = src.rgb;
-    bg = src.rgb * 0.06;
-  } else if (u_colorMode > 1.5) {
-    fg = vec3(0.35, 1.0, 0.55);
-    bg = vec3(0.0, 0.04, 0.02);
+  vec2 glyphUV = cellUV / max(0.15, 1.0 - u_charSpacing);
+  float cov = 0.0;
+  if (abs(glyphUV.x) < 0.5 && abs(glyphUV.y) < 0.5) {
+    vec2 atlasUV = vec2((level + glyphUV.x + 0.5) / u_charsetCount, glyphUV.y + 0.5);
+    cov = texture2D(u_charsetAtlas, atlasUV).a;
   }
+  cov = clamp(cov * u_coverage * flickerMul, 0.0, 1.0);
 
-  vec3 col = mix(bg, fg, cov * u_charOpacity);
-  col = applyBlend(src.rgb, col, u_colorBlendMode);
+  vec3 col;
+  float outAlpha = src.a;
+
+  if (u_renderMode > 0.5) {
+    // Overlay: the original image stays fully visible (at native resolution, not per-cell blocks);
+    // characters are composited on top of it.
+    vec3 charColor;
+    if (u_colorSource < 0.5) {
+      charColor = src.rgb;
+    } else if (u_colorSource < 1.5) {
+      charColor = unpackColor(u_overlayColor);
+    } else {
+      charColor = mix(unpackColor(u_overlayGradientStart), unpackColor(u_overlayGradientEnd), lum);
+    }
+    vec3 blended = applyBlend(srcFull.rgb, charColor, u_overlayBlendMode);
+    col = mix(srcFull.rgb, blended, cov * u_overlayOpacity);
+    outAlpha = srcFull.a;
+  } else {
+    // Full ASCII: the character grid entirely replaces the image.
+    vec3 bg = vec3(0.03);
+    vec3 fg = vec3(0.92);
+    if (u_colorMode > 0.5 && u_colorMode < 1.5) {
+      fg = src.rgb;
+      bg = src.rgb * 0.06;
+    } else if (u_colorMode > 1.5) {
+      fg = vec3(0.35, 1.0, 0.55);
+      bg = vec3(0.0, 0.04, 0.02);
+    }
+    if (u_background > 1.5) {
+      bg = unpackColor(u_backgroundColor);
+    }
+
+    col = mix(bg, fg, cov * u_charOpacity);
+    col = applyBlend(src.rgb, col, u_colorBlendMode);
+    col *= u_brightness;
+
+    if (u_background > 0.5 && u_background < 1.5) {
+      outAlpha = src.a * cov;
+    }
+  }
 
   if (u_dotGridOverlay > 0.5) {
-    vec2 gridUV = fract(v_uv * u_resolution / cell);
+    vec2 gridUV = fract(v_uv * u_resolution / cellAdj);
     float gd = length(gridUV);
     float dotMask = 1.0 - smoothstep(0.03, 0.07, gd);
     col += dotMask * 0.18;
   }
 
-  col *= u_brightness;
-  gl_FragColor = vec4(clamp(col, 0.0, 1.0), src.a);
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), outAlpha);
       `
     ),
   },
