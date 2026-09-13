@@ -135,6 +135,30 @@ function SliderControl({ def, value, onChange }: Props) {
   );
 }
 
+export function TextParamControl({
+  def,
+  value,
+  onChange,
+}: {
+  def: ParamDef;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400">{def.label}</span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={def.defaultText}
+        spellCheck={false}
+        className="w-full rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1.5 font-mono text-[12px] text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-white/30"
+      />
+    </div>
+  );
+}
+
 function formatNumber(n: number) {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }

@@ -1,4 +1,4 @@
-export type ParamType = 'float' | 'int' | 'color' | 'select' | 'bool';
+export type ParamType = 'float' | 'int' | 'color' | 'select' | 'bool' | 'text';
 
 export interface SelectOption {
   label: string;
@@ -19,6 +19,11 @@ export interface ParamDef {
   color?: boolean;
   /** Named section this param renders under in the settings panel, e.g. "Intensity". */
   group?: string;
+  /** Default value for a 'text' type param (e.g. a typed character ramp). */
+  defaultText?: string;
+  /** Only render this param when another param (numeric) currently equals a given value.
+   *  An array requires every condition to match (AND). */
+  visibleWhen?: { key: string; equals: number } | { key: string; equals: number }[];
 }
 
 export type ShaderCategory =
@@ -31,6 +36,11 @@ export type ShaderCategory =
   | 'DreamLight'
   | 'Custom';
 
+export interface QuickPresetDef {
+  name: string;
+  values: Record<string, number>;
+}
+
 export interface ShaderDef {
   id: string;
   name: string;
@@ -40,6 +50,10 @@ export interface ShaderDef {
   fragmentShader: string;
   params: ParamDef[];
   custom?: boolean;
+  /** Opt-in: the renderer builds/binds a character-atlas texture (see charsets.ts) for this shader. */
+  usesCharsetAtlas?: boolean;
+  /** Quick param-value bundles shown as a chip row above the settings groups. */
+  quickPresets?: QuickPresetDef[];
 }
 
 export interface StackItem {
@@ -47,6 +61,8 @@ export interface StackItem {
   shaderId: string;
   enabled: boolean;
   params: Record<string, number>;
+  /** Values for any 'text'-type params (e.g. a typed custom character ramp). */
+  textParams?: Record<string, string>;
 }
 
 export interface PresetDef {
