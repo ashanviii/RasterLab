@@ -42,7 +42,7 @@ export default function RightPanel() {
   const groupedParams = (name: string): ParamDef[] => def?.params.filter((p) => effectiveGroup(p) === name) ?? [];
 
   return (
-    <aside className="glass flex h-full w-[300px] shrink-0 flex-col rounded-2xl overflow-hidden">
+    <aside className="glass flex h-full w-[300px] shrink-0 flex-col rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-3.5 pt-3.5 pb-2">
         <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
           <SlidersHorizontal size={12} />
@@ -128,7 +128,7 @@ export default function RightPanel() {
 
 function SectionHeader({ label, icon: Icon }: { label: string; icon: typeof Type }) {
   return (
-    <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-accent-600 dark:text-accent-400">
+    <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
       <Icon size={11} />
       {label}
     </div>

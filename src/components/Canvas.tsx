@@ -254,7 +254,7 @@ export default function Canvas({ onRendererReady }: Props) {
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full w-full items-center justify-center overflow-auto rounded-2xl"
+      className="glass dot-grid relative flex h-full w-full items-center justify-center overflow-auto rounded-xl"
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragOver(true);
@@ -278,9 +278,9 @@ export default function Canvas({ onRendererReady }: Props) {
         <div className="flex flex-col items-center gap-5">
           <div
             className={clsx(
-              'flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-16 py-20 text-center transition-colors duration-200',
+              'flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-16 py-20 text-center transition-colors duration-200',
               isDragOver
-                ? 'border-accent-400 bg-accent-500/5'
+                ? 'border-neutral-400 dark:border-white/40 bg-black/[0.02] dark:bg-white/5'
                 : 'border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20'
             )}
           >
@@ -320,7 +320,7 @@ export default function Canvas({ onRendererReady }: Props) {
       <div
         ref={frameRef}
         className={clsx(
-          'select-none overflow-hidden rounded-xl shadow-[0_1px_1px_rgba(0,0,0,0.04),0_20px_40px_-16px_rgba(0,0,0,0.25)] ring-1 ring-black/5 dark:ring-white/10',
+          'select-none overflow-hidden rounded-lg shadow-[0_1px_1px_rgba(0,0,0,0.04),0_20px_40px_-16px_rgba(0,0,0,0.25)] ring-1 ring-black/5 dark:ring-white/10',
           image ? 'relative' : 'invisible absolute inset-0 m-auto'
         )}
         style={{ width: cssW, height: cssH }}
@@ -540,7 +540,7 @@ function ToolbarIconButton({
         'flex h-[26px] w-[26px] items-center justify-center rounded-full transition-colors',
         disabled && 'cursor-not-allowed opacity-50',
         active
-          ? 'bg-accent-500 text-white hover:bg-accent-600'
+          ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:opacity-90'
           : 'text-neutral-500 dark:text-neutral-400 hover:bg-black/[0.06] dark:hover:bg-white/10 hover:text-neutral-900 dark:hover:text-white'
       )}
     >
@@ -556,7 +556,7 @@ function SampleThumb({ sample, onSelect }: { sample: SampleImage; onSelect: () =
     <button
       onClick={onSelect}
       title={sample.name}
-      className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl ring-1 ring-black/10 dark:ring-white/10 transition-transform duration-150 hover:scale-105 hover:ring-accent-400/60"
+      className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg ring-1 ring-black/10 dark:ring-white/10 transition-transform duration-150 hover:scale-105 hover:ring-neutral-400 dark:hover:ring-white/40"
     >
       {!failed ? (
         <img

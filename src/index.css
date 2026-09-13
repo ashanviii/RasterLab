@@ -1,13 +1,22 @@
+@import '@fontsource/geist-sans/400.css';
+@import '@fontsource/geist-sans/500.css';
+@import '@fontsource/geist-sans/600.css';
+@import '@fontsource/geist-sans/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: light;
+  --range-fill: theme('colors.neutral.900');
+  --dot-color: rgba(0, 0, 0, 0.09);
 }
 
 html.dark {
   color-scheme: dark;
+  --range-fill: #fff;
+  --dot-color: rgba(255, 255, 255, 0.09);
 }
 
 * {
@@ -21,23 +30,21 @@ body,
 }
 
 body {
-  @apply bg-neutral-100 text-neutral-900 antialiased;
-  @apply dark:bg-[#0b0b0e] dark:text-neutral-100;
+  @apply bg-neutral-50 text-neutral-900 antialiased;
+  @apply dark:bg-[#0a0a0a] dark:text-neutral-100;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
-/* Glass panel */
+/* Flat panel, shadcn-style: solid surface + a thin hairline border instead of glassy blur. */
 .glass {
-  @apply bg-white/70 dark:bg-neutral-900/60;
-  @apply backdrop-blur-xl backdrop-saturate-150;
-  @apply border border-black/[0.06] dark:border-white/[0.08];
+  @apply bg-white dark:bg-[#0d0d0f];
+  @apply border border-neutral-200 dark:border-neutral-800;
   @apply shadow-glass dark:shadow-glass-dark;
 }
 
 .glass-strong {
-  @apply bg-white/85 dark:bg-neutral-900/75;
-  @apply backdrop-blur-xl backdrop-saturate-150;
-  @apply border border-black/[0.06] dark:border-white/[0.08];
+  @apply bg-white dark:bg-[#111113];
+  @apply border border-neutral-200 dark:border-neutral-800;
 }
 
 /* Scrollbars */
@@ -64,8 +71,8 @@ input[type='range'] {
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    theme('colors.accent.500') 0%,
-    theme('colors.accent.500') var(--fill, 50%),
+    var(--range-fill) 0%,
+    var(--range-fill) var(--fill, 50%),
     rgba(120, 120, 130, 0.2) var(--fill, 50%),
     rgba(120, 120, 130, 0.2) 100%
   );
@@ -116,6 +123,12 @@ input[type='number'] {
 
 .transition-smooth {
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Design-tool-style dotted canvas backdrop. */
+.dot-grid {
+  background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 /* Authentication */

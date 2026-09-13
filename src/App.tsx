@@ -87,7 +87,7 @@ export default function App() {
 
   return (
     <RendererContext.Provider value={{ renderer }}>
-      <div className="flex h-screen w-screen flex-col gap-3 bg-neutral-100 dark:bg-[#0b0b0e] p-3">
+      <div className="flex h-screen w-screen flex-col gap-3 bg-neutral-50 dark:bg-[#0a0a0a] p-3">
         <TopBar
           isDark={isDark}
           onToggleDark={() => setIsDark((v) => !v)}
@@ -97,7 +97,7 @@ export default function App() {
         <div className="flex min-h-0 flex-1 gap-3">
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <div className="min-h-0 flex-1 rounded-2xl">
+            <div className="min-h-0 flex-1 rounded-xl">
               <Canvas onRendererReady={setRenderer} />
             </div>
             <StackBar />

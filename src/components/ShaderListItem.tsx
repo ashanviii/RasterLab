@@ -23,28 +23,26 @@ export default function ShaderListItem({ def, onAdd, onClick }: Props) {
 
   return (
     <div
-      onClick={onClick}
-      className="group flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-black/[0.035] dark:hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer"
+      onClick={onClick ?? onAdd}
+      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-white/[0.02] transition-all duration-150 hover:border-neutral-300 dark:hover:border-white/20 hover:shadow-sm"
     >
-      <div
-        className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br ${def.thumbnail} shadow-inner ring-1 ring-black/5 dark:ring-white/10`}
-      >
+      <div className={`relative aspect-square w-full overflow-hidden bg-gradient-to-br ${def.thumbnail}`}>
         {thumbnail && <img src={thumbnail} alt="" draggable={false} className="h-full w-full object-cover" />}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAdd();
+          }}
+          title={`Add ${def.name} to stack`}
+          className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 dark:bg-neutral-900/80 text-neutral-700 dark:text-neutral-200 opacity-0 shadow-sm ring-1 ring-black/5 dark:ring-white/10 transition-all duration-150 group-hover:opacity-100 hover:!bg-neutral-900 hover:!text-white dark:hover:!bg-white dark:hover:!text-neutral-900"
+        >
+          <Plus size={13} strokeWidth={2.5} />
+        </button>
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-medium text-neutral-800 dark:text-neutral-100">{def.name}</div>
-        <div className="truncate text-[11.5px] text-neutral-400 dark:text-neutral-500">{def.category}</div>
+      <div className="px-2 py-1.5">
+        <div className="truncate text-[12px] font-medium text-neutral-800 dark:text-neutral-100">{def.name}</div>
+        <div className="truncate text-[10.5px] text-neutral-400 dark:text-neutral-500">{def.category}</div>
       </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onAdd();
-        }}
-        title={`Add ${def.name} to stack`}
-        className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.05] dark:bg-white/10 text-neutral-500 dark:text-neutral-300 opacity-0 group-hover:opacity-100 hover:bg-accent-500 hover:text-white transition-all duration-150"
-      >
-        <Plus size={13} strokeWidth={2.5} />
-      </button>
     </div>
   );
 }
