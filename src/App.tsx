@@ -8,13 +8,23 @@ import StackBar from './components/StackBar';
 import TopBar from './components/TopBar';
 import AuthFlow from './components/AuthFlow';
 import { getCurrentUser, logout, onAuthStateChange, type AuthSession } from './lib/auth';
+import { isSupabaseConfigured } from './lib/supabase';
 import { RendererContext } from './context/RendererContext';
 import type { GLRenderer } from './webgl/renderer';
 
+/** Used only when running locally without Supabase credentials configured (see isSupabaseConfigured). */
+const DEV_FALLBACK_SESSION: AuthSession = {
+  id: 'local-dev',
+  email: 'dev@localhost',
+  name: 'Local Dev',
+  avatar: null,
+  provider: 'password',
+};
+
 export default function App() {
   const [renderer, setRenderer] = useState<GLRenderer | null>(null);
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [session, setSession] = useState<AuthSession | null>(isSupabaseConfigured ? null : DEV_FALLBACK_SESSION);
+  const [isSessionLoading, setIsSessionLoading] = useState(isSupabaseConfigured);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(() => (
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('reset-password') === '1'
   ));
@@ -29,6 +39,7 @@ export default function App() {
   }, [isDark]);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) return;
     let active = true;
     const subscription = onAuthStateChange((event, user) => {
       if (!active) return;
@@ -51,6 +62,7 @@ export default function App() {
   }, []);
 
   async function handleLogout() {
+    if (!isSupabaseConfigured) return;
     await logout();
     setSession(null);
   }
@@ -63,7 +75,7 @@ export default function App() {
     setSession(await getCurrentUser());
   }
 
-  if (isSessionLoading) {
+  if (isSupabaseConfigured && isSessionLoading) {
     return (
       <div className="auth-loading" role="status" aria-label="Loading Stencil">
         <SparkleLogo />
@@ -71,7 +83,7 @@ export default function App() {
     );
   }
 
-  if (isPasswordRecovery) {
+  if (isSupabaseConfigured && isPasswordRecovery) {
     return (
       <AuthFlow
         initialView="update-password"
@@ -81,7 +93,7 @@ export default function App() {
     );
   }
 
-  if (!session) {
+  if (isSupabaseConfigured && !session) {
     return <AuthFlow onAuthenticate={setSession} />;
   }
 
@@ -91,7 +103,7 @@ export default function App() {
         <TopBar
           isDark={isDark}
           onToggleDark={() => setIsDark((v) => !v)}
-          userName={session.name}
+          userName={(session ?? DEV_FALLBACK_SESSION).name}
           onLogout={handleLogout}
         />
         <div className="flex min-h-0 flex-1 gap-3">
