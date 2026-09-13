@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import Sidebar from './components/Sidebar';
 import RightPanel from './components/RightPanel';
 import Canvas from './components/Canvas';
 import StackBar from './components/StackBar';
 import TopBar from './components/TopBar';
+import AuthFlow from './components/AuthFlow';
+import { getCurrentUser, logout, onAuthStateChange, type AuthSession } from './lib/auth';
 import { RendererContext } from './context/RendererContext';
 import type { GLRenderer } from './webgl/renderer';
 
 export default function App() {
   const [renderer, setRenderer] = useState<GLRenderer | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(() => (
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('reset-password') === '1'
+  ));
   const [isDark, setIsDark] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('stencil-theme') === 'dark';
@@ -19,10 +28,72 @@ export default function App() {
     localStorage.setItem('stencil-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
+  useEffect(() => {
+    let active = true;
+    const subscription = onAuthStateChange((event, user) => {
+      if (!active) return;
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
+      setSession(user);
+      setIsSessionLoading(false);
+    });
+
+    getCurrentUser()
+      .then((user) => {
+        if (active) setSession(user);
+      })
+      .finally(() => {
+        if (active) setIsSessionLoading(false);
+      });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleLogout() {
+    await logout();
+    setSession(null);
+  }
+
+  async function handlePasswordUpdated() {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('reset-password');
+    window.history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+    setIsPasswordRecovery(false);
+    setSession(await getCurrentUser());
+  }
+
+  if (isSessionLoading) {
+    return (
+      <div className="auth-loading" role="status" aria-label="Loading Stencil">
+        <SparkleLogo />
+      </div>
+    );
+  }
+
+  if (isPasswordRecovery) {
+    return (
+      <AuthFlow
+        initialView="update-password"
+        onAuthenticate={setSession}
+        onPasswordUpdated={() => void handlePasswordUpdated()}
+      />
+    );
+  }
+
+  if (!session) {
+    return <AuthFlow onAuthenticate={setSession} />;
+  }
+
   return (
     <RendererContext.Provider value={{ renderer }}>
       <div className="flex h-screen w-screen flex-col gap-3 bg-neutral-50 dark:bg-[#0a0a0a] p-3">
-        <TopBar isDark={isDark} onToggleDark={() => setIsDark((v) => !v)} />
+        <TopBar
+          isDark={isDark}
+          onToggleDark={() => setIsDark((v) => !v)}
+          userName={session.name}
+          onLogout={handleLogout}
+        />
         <div className="flex min-h-0 flex-1 gap-3">
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col gap-3">
@@ -34,6 +105,12 @@ export default function App() {
           <RightPanel />
         </div>
       </div>
+      <Analytics />
+      <SpeedInsights />
     </RendererContext.Provider>
   );
+}
+
+function SparkleLogo() {
+  return <span aria-hidden="true">✦</span>;
 }

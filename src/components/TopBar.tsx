@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Download, ImagePlus, Moon, Sparkle, Sun } from 'lucide-react';
+import { ChevronDown, Download, ImagePlus, LogOut, Moon, Sparkle, Sun } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../store/useStore';
 import {
@@ -17,6 +17,8 @@ import { timeRef } from '../lib/timeRef';
 interface Props {
   isDark: boolean;
   onToggleDark: () => void;
+  userName: string;
+  onLogout: () => void;
 }
 
 type ExportFormat = 'png' | 'jpeg' | 'gif' | 'video';
@@ -31,7 +33,7 @@ const FORMATS: { id: ExportFormat; label: string }[] = [
 
 const FPS_OPTIONS = [12, 24, 30];
 
-export default function TopBar({ isDark, onToggleDark }: Props) {
+export default function TopBar({ isDark, onToggleDark, userName, onLogout }: Props) {
   const image = useStore((s) => s.image);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const setImage = useStore((s) => s.setImage);
@@ -175,6 +177,16 @@ export default function TopBar({ isDark, onToggleDark }: Props) {
           className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 dark:text-neutral-400 hover:bg-black/[0.05] dark:hover:bg-white/10 transition-colors"
         >
           {isDark ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
+
+        <button
+          onClick={onLogout}
+          title={`Sign out ${userName}`}
+          aria-label={`Sign out ${userName}`}
+          className="flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium text-neutral-500 transition-colors hover:bg-black/[0.05] hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-neutral-100"
+        >
+          <span className="hidden max-w-24 truncate sm:inline">{userName}</span>
+          <LogOut size={14} />
         </button>
 
         <div className="relative" ref={popoverRef}>
