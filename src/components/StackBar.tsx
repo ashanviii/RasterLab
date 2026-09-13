@@ -38,8 +38,8 @@ export default function StackBar() {
   }
 
   return (
-    <div className="glass flex h-[210px] w-full flex-col rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-black/[0.05] dark:border-white/[0.06]">
+    <div className="glass flex h-[210px] w-full flex-col rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-neutral-200 dark:border-neutral-800">
         <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
           <Layers size={12} />
           Shader Stack
@@ -110,10 +110,10 @@ function StackRow({ item }: { item: StackItem }) {
       style={style}
       onClick={() => selectStackItem(item.instanceId)}
       className={clsx(
-        'group flex items-center gap-2 rounded-xl px-2 py-2 cursor-pointer transition-colors duration-150 border',
+        'group flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer transition-colors duration-150 border',
         isDragging && 'z-10 shadow-lg',
         selected
-          ? 'bg-accent-500/10 border-accent-400/40'
+          ? 'bg-neutral-100 dark:bg-white/[0.08] border-neutral-300 dark:border-white/20'
           : 'border-transparent hover:bg-black/[0.03] dark:hover:bg-white/[0.05]',
         !item.enabled && 'opacity-45'
       )}
@@ -138,7 +138,7 @@ function StackRow({ item }: { item: StackItem }) {
         <span
           className={clsx(
             'block h-2 w-2 rounded-full transition-colors',
-            item.enabled ? 'bg-accent-500' : 'bg-neutral-300 dark:bg-neutral-600'
+            item.enabled ? 'bg-neutral-900 dark:bg-white' : 'bg-neutral-300 dark:bg-neutral-600'
           )}
         />
       </button>

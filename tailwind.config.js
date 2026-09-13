@@ -21,6 +21,7 @@ export default {
       },
       fontFamily: {
         sans: [
+          '"Geist Sans"',
           '-apple-system',
           'BlinkMacSystemFont',
           '"SF Pro Display"',
@@ -34,8 +35,8 @@ export default {
         xs: '2px',
       },
       boxShadow: {
-        glass: '0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -8px rgba(0,0,0,0.12)',
-        'glass-dark': '0 1px 2px rgba(0,0,0,0.2), 0 8px 24px -8px rgba(0,0,0,0.5)',
+        glass: '0 1px 2px rgba(0,0,0,0.03), 0 1px 6px -2px rgba(0,0,0,0.06)',
+        'glass-dark': '0 1px 2px rgba(0,0,0,0.2), 0 1px 8px -2px rgba(0,0,0,0.35)',
       },
       borderRadius: {
         xl2: '1.25rem',

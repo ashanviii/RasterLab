@@ -24,7 +24,7 @@ export default function ParamControl({ def, value, onChange }: Props) {
           <select
             value={value}
             onChange={(e) => onChange(parseFloat(e.target.value))}
-            className="rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 text-[11px] text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-accent-400"
+            className="rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 text-[11px] text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-white/30"
           >
             {options.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -68,12 +68,12 @@ export default function ParamControl({ def, value, onChange }: Props) {
           onClick={() => onChange(on ? 0 : 1)}
           className={clsx(
             'relative h-[22px] w-[38px] rounded-full transition-colors duration-200',
-            on ? 'bg-accent-500' : 'bg-black/15 dark:bg-white/15'
+            on ? 'bg-neutral-900 dark:bg-neutral-200' : 'bg-black/15 dark:bg-white/15'
           )}
         >
           <span
             className={clsx(
-              'absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200',
+              'absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm ring-1 ring-black/10 transition-transform duration-200',
               on ? 'translate-x-[18px]' : 'translate-x-[2px]'
             )}
           />
@@ -117,7 +117,7 @@ function SliderControl({ def, value, onChange }: Props) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
             }}
-            className="w-14 rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-1.5 py-0.5 text-right text-[11px] tabular-nums text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-accent-400"
+            className="w-14 rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-1.5 py-0.5 text-right text-[11px] tabular-nums text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-white/30"
           />
           {def.unit && <span className="text-[10px] text-neutral-400 w-3">{def.unit}</span>}
         </div>

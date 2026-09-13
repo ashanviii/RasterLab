@@ -133,7 +133,7 @@ export default function TopBar({ isDark, onToggleDark }: Props) {
     : `Download ${formatLabel}`;
 
   return (
-    <div className="glass relative z-20 flex h-14 w-full shrink-0 items-center justify-between rounded-2xl px-4">
+    <div className="glass relative z-20 flex h-14 w-full shrink-0 items-center justify-between rounded-xl px-4">
       <input
         ref={fileInputRef}
         type="file"
@@ -146,7 +146,7 @@ export default function TopBar({ isDark, onToggleDark }: Props) {
       />
 
       <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-accent-400 to-accent-600 text-white shadow-sm">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-black/10 dark:border-white/15 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 shadow-sm">
           <Sparkle size={14} fill="currentColor" strokeWidth={0} />
         </div>
         <span className="text-[14px] font-semibold tracking-tight text-neutral-900 dark:text-white">Stencil</span>
@@ -194,7 +194,7 @@ export default function TopBar({ isDark, onToggleDark }: Props) {
           </button>
 
           {exportOpen && image && (
-            <div className="absolute right-0 top-11 z-30 w-72 rounded-xl border border-black/[0.06] bg-white p-3 shadow-glass animate-pop-in origin-top-right dark:border-white/[0.08] dark:bg-neutral-900 dark:shadow-glass-dark">
+            <div className="absolute right-0 top-11 z-30 w-72 rounded-lg border border-neutral-200 bg-white p-3 shadow-glass animate-pop-in origin-top-right dark:border-neutral-800 dark:bg-[#111113] dark:shadow-glass-dark">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400 mb-2">Format</div>
               <div className="grid grid-cols-4 gap-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.06] p-1">
                 {FORMATS.map((f) => {
@@ -244,7 +244,7 @@ export default function TopBar({ isDark, onToggleDark }: Props) {
                     value={customW}
                     min={1}
                     onChange={(e) => setCustomW(parseInt(e.target.value) || 1)}
-                    className="w-full min-w-0 rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 text-[12px] text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-accent-400"
+                    className="w-full min-w-0 rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 text-[12px] text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-white/30"
                   />
                   <span className="text-neutral-400 text-[11px]">×</span>
                   <input
@@ -252,7 +252,7 @@ export default function TopBar({ isDark, onToggleDark }: Props) {
                     value={customH}
                     min={1}
                     onChange={(e) => setCustomH(parseInt(e.target.value) || 1)}
-                    className="w-full min-w-0 rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 text-[12px] text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-accent-400"
+                    className="w-full min-w-0 rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 text-[12px] text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-white/30"
                   />
                 </div>
               )}
@@ -325,7 +325,7 @@ export default function TopBar({ isDark, onToggleDark }: Props) {
               <button
                 onClick={handleExport}
                 disabled={isExporting}
-                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent-500 py-2 text-[12px] font-medium text-white hover:bg-accent-600 transition-colors disabled:opacity-60"
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-neutral-900 dark:bg-white py-2 text-[12px] font-medium text-white dark:text-neutral-900 hover:opacity-90 transition-opacity disabled:opacity-60"
               >
                 {downloadLabel}
               </button>
@@ -353,7 +353,9 @@ function ExportOption({
       onClick={onClick}
       className={clsx(
         'flex flex-col items-start rounded-lg px-2.5 py-1.5 text-left transition-colors',
-        active ? 'bg-accent-500/10 ring-1 ring-accent-400/40' : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+        active
+          ? 'bg-neutral-100 dark:bg-white/10 ring-1 ring-neutral-300 dark:ring-white/20'
+          : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
       )}
     >
       <span className="text-[12px] font-medium text-neutral-800 dark:text-neutral-100">{label}</span>

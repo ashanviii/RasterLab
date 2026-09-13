@@ -68,7 +68,7 @@ export default function CustomShaderEditor({ def, onBack }: Props) {
       <div className="px-3 pb-2">
         <button
           onClick={() => addToStack(def.id)}
-          className="w-full rounded-lg bg-accent-500 py-1.5 text-[12px] font-medium text-white hover:bg-accent-600 transition-colors shadow-sm"
+          className="w-full rounded-lg bg-neutral-900 dark:bg-white py-1.5 text-[12px] font-medium text-white dark:text-neutral-900 hover:opacity-90 transition-opacity shadow-sm"
         >
           Add to Stack
         </button>
@@ -82,7 +82,7 @@ export default function CustomShaderEditor({ def, onBack }: Props) {
             setSource(e.target.value);
             setDirty(true);
           }}
-          className="scroll-thin h-full w-full resize-none rounded-xl border border-black/[0.06] dark:border-white/[0.08] bg-black/[0.03] dark:bg-black/30 p-3 font-mono text-[11.5px] leading-relaxed text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-accent-400"
+          className="scroll-thin h-full w-full resize-none rounded-lg border border-neutral-200 dark:border-neutral-800 bg-black/[0.03] dark:bg-black/30 p-3 font-mono text-[11.5px] leading-relaxed text-neutral-700 dark:text-neutral-200 outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-white/30"
         />
       </div>
 
