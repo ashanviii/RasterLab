@@ -184,9 +184,12 @@ export default function AuthFlow({ onAuthenticate, initialView = 'login', onPass
                   <>
                     <div className="auth-google">
                       <button type="button" className="auth-google-button" onClick={() => void handleGoogleLogin()} disabled={isSubmitting}>
-                        <span>G</span> Continue with Google
+                        <span>G</span> {view === 'signup' ? 'Sign up with Google' : 'Continue with Google'}
                       </button>
                     </div>
+                    {view === 'login' && (
+                      <p className="auth-google-note">New to Stencil? Continuing creates your account automatically.</p>
+                    )}
                     <div className="auth-divider"><span>or continue with email</span></div>
                   </>
                 )}
