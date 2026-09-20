@@ -9,6 +9,10 @@ function withUniversalParams(def: ShaderDef): ShaderDef {
   return { ...def, params: [...def.params, ...UNIVERSAL_PARAMS] };
 }
 
+// Recomputing this merge (and wrapping every def with universal params) is only needed when the
+// set of custom shaders changes -- not on every render-loop frame, which is how often it's called.
+let shaderDefsCache: { customShaders: ShaderDef[]; result: Record<string, ShaderDef> } | null = null;
+
 export type SidebarTab = 'effects' | 'presets' | 'custom';
 export type ViewMode = 'rendered' | 'original' | 'split';
 export type MaskTool = 'none' | 'erase' | 'add';
@@ -376,7 +380,13 @@ export const useStore = create<StencilState>((set, get) => ({
   setMaskBrushOpacity: (n) => set({ maskBrushOpacity: n }),
 
   allShaderDefs: () => {
-    const merged = { ...SHADER_MAP, ...Object.fromEntries(get().customShaders.map((d) => [d.id, d])) };
-    return Object.fromEntries(Object.entries(merged).map(([id, def]) => [id, withUniversalParams(def)]));
+    const customShaders = get().customShaders;
+    if (shaderDefsCache && shaderDefsCache.customShaders === customShaders) {
+      return shaderDefsCache.result;
+    }
+    const merged = { ...SHADER_MAP, ...Object.fromEntries(customShaders.map((d) => [d.id, d])) };
+    const result = Object.fromEntries(Object.entries(merged).map(([id, def]) => [id, withUniversalParams(def)]));
+    shaderDefsCache = { customShaders, result };
+    return result;
   },
 }));
