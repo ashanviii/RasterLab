@@ -34,6 +34,14 @@ interface CharsetAtlasEntry {
 
 const PINGPONG_SLOTS = 3;
 
+/**
+ * Render height at which pixel-space effect params (cell size, block size, offsets, ...) look
+ * exactly as authored -- u_pixelScale is 1.0 here. Preview typically renders below this (downscaled
+ * to fit the screen) and exports often render above it (original/custom resolution), so scaling
+ * pixel-space quantities by u_pixelScale keeps an effect's visual density the same in both.
+ */
+const PIXEL_SCALE_REFERENCE_HEIGHT = 1080;
+
 export interface RenderOptions {
   width: number;
   height: number;
@@ -55,13 +63,19 @@ export class GLRenderer {
   private masks = new Map<string, MaskEntry>();
   private charsetAtlases = new Map<string, CharsetAtlasEntry>();
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, opts?: { preserveDrawingBuffer?: boolean }) {
     this.canvas = canvas;
     const gl = canvas.getContext('webgl', {
       alpha: true,
       premultipliedAlpha: false,
-      preserveDrawingBuffer: true,
-      antialias: true,
+      // Only export renderers need this (they read pixels back after an `await`, once the browser
+      // may have already cleared an unpreserved buffer). The live canvas redraws every RAF frame and
+      // never reads its own pixels back, so forcing the browser to retain/copy the buffer here was
+      // pure overhead -- a well-known source of WebGL jank on a continuously-rendered canvas.
+      preserveDrawingBuffer: opts?.preserveDrawingBuffer ?? false,
+      // Every pass in this renderer draws a full-viewport quad with no internal edges, so MSAA has
+      // nothing to smooth -- it only added cost to the final resolve.
+      antialias: false,
     });
     if (!gl) throw new Error('WebGL is not supported in this browser.');
     this.gl = gl;
@@ -244,6 +258,9 @@ export class GLRenderer {
     if (prog.uniforms['u_texture']) gl.uniform1i(prog.uniforms['u_texture'], unit);
     if (prog.uniforms['u_resolution']) gl.uniform2f(prog.uniforms['u_resolution'], width, height);
     if (prog.uniforms['u_time']) gl.uniform1f(prog.uniforms['u_time'], time);
+    if (prog.uniforms['u_pixelScale']) {
+      gl.uniform1f(prog.uniforms['u_pixelScale'], height / PIXEL_SCALE_REFERENCE_HEIGHT);
+    }
   }
 
   private setParamUniforms(prog: CompiledProgram, params: Record<string, number>) {
@@ -364,6 +381,13 @@ export class GLRenderer {
 
     const texture = gl.createTexture();
     if (!texture) throw new Error('Failed to create charset atlas texture.');
+    // Bind on the atlas's own texture unit (1), not whatever unit happens to be active -- the
+    // caller has TEXTURE0 (the source image) active at this point, and binding here without
+    // switching units would silently repoint u_texture at the atlas instead of the source image.
+    // On a cache hit this function returns above before touching GL state, which is why this only
+    // ever showed up on a fresh renderer (i.e. every export) the first time a charset was needed,
+    // never in the continuously-rerendering live preview.
+    gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     // Match the orientation convention used for the source image / masks so v=0 is the same edge.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
@@ -442,13 +466,16 @@ export class GLRenderer {
       const def = shaderDefs[item.shaderId];
       const isLast = i === enabled.length - 1;
       const cacheKey = def.custom ? `custom:${item.instanceId}` : `builtin:${def.id}`;
-      const fragSource = getFragmentSource(item, def);
 
-      let prog: CompiledProgram;
-      try {
-        prog = this.compileProgram(cacheKey, fragSource);
-      } catch (e) {
-        prog = this.identityProgram;
+      // Skip regenerating the fragment source (a string build for every custom shader) when the
+      // compiled program is already cached -- it would just be thrown away below.
+      let prog: CompiledProgram | undefined = this.programCache.get(cacheKey);
+      if (!prog) {
+        try {
+          prog = this.compileProgram(cacheKey, getFragmentSource(item, def));
+        } catch (e) {
+          prog = this.identityProgram;
+        }
       }
 
       const originalInputTexture = inputTexture;

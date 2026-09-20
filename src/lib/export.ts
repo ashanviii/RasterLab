@@ -25,7 +25,7 @@ export async function exportStillImage(
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const renderer = new GLRenderer(canvas);
+  const renderer = new GLRenderer(canvas, { preserveDrawingBuffer: true });
   try {
     renderer.setImage(image, image.naturalWidth, image.naturalHeight);
     renderer.render(stack, shaderDefs, getFragmentSource, { width, height, time });
@@ -52,7 +52,7 @@ export async function exportGif(
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const renderer = new GLRenderer(canvas);
+  const renderer = new GLRenderer(canvas, { preserveDrawingBuffer: true });
   const readCanvas = document.createElement('canvas');
   readCanvas.width = width;
   readCanvas.height = height;
@@ -118,7 +118,7 @@ export async function exportVideo(
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const renderer = new GLRenderer(canvas);
+  const renderer = new GLRenderer(canvas, { preserveDrawingBuffer: true });
 
   try {
     renderer.setImage(image, image.naturalWidth, image.naturalHeight);

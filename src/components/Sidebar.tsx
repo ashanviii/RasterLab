@@ -14,6 +14,7 @@ const CATEGORIES: (ShaderCategory | 'All')[] = [
   'Color',
   'Texture',
   'Light',
+  'Glass',
   'Retro',
   'ASCII',
   'DreamLight',

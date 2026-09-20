@@ -31,7 +31,7 @@ uniform float u_colorBlendMode;
       `,
       `
   vec2 dir = vec2(cos(radians(u_angle)), sin(radians(u_angle)));
-  vec2 px = dir / u_resolution;
+  vec2 px = dir * u_pixelScale / u_resolution;
   float amt = u_intensity;
   vec2 rUV = v_uv + px * u_redOffset * amt;
   vec2 gUV = v_uv + px * u_greenOffset * amt;
@@ -69,7 +69,7 @@ uniform float u_seed;
       `,
       `
   float t = u_time * u_speed;
-  float blockY = floor(v_uv.y * u_resolution.y / max(u_blockSize, 1.0));
+  float blockY = floor(v_uv.y * u_resolution.y / max(u_blockSize * u_pixelScale, 1.0));
   float n = hash12(vec2(blockY, floor(t * 10.0) + u_seed));
   float trigger = step(0.55, hash12(vec2(blockY, floor(t * 6.0) + u_seed + 1.0)));
   float shift = (n - 0.5) * u_amount * trigger;
@@ -119,7 +119,7 @@ uniform float u_chromaAberration;
     float g = texture2D(u_texture, uv).g;
     float b = texture2D(u_texture, uv - vec2(ca, 0.0)).b;
     vec3 col = vec3(r, g, b);
-    float scan = sin(uv.y * u_resolution.y * 1.0) * 0.5 + 0.5;
+    float scan = sin(uv.y * u_resolution.y / u_pixelScale * 1.0) * 0.5 + 0.5;
     col *= mix(1.0, scan, u_scanlineIntensity);
     vec2 vc = uv - 0.5;
     float vig = 1.0 - dot(vc, vc) * u_vignette * 2.0;
@@ -146,7 +146,7 @@ uniform float u_pixelSize;
 uniform float u_smoothness;
       `,
       `
-  vec2 size = max(vec2(1.0), vec2(u_pixelSize));
+  vec2 size = max(vec2(1.0), vec2(u_pixelSize)) * u_pixelScale;
   vec2 uv = (floor(v_uv * u_resolution / size) + 0.5) * size / u_resolution;
   vec2 uvFinal = mix(uv, v_uv, u_smoothness);
   gl_FragColor = texture2D(u_texture, uvFinal);
@@ -181,7 +181,7 @@ uniform float u_pixelSize;
 uniform float u_colorMode;
       `,
       `
-  vec2 ps = max(vec2(1.0), vec2(u_pixelSize));
+  vec2 ps = max(vec2(1.0), vec2(u_pixelSize)) * u_pixelScale;
   vec2 uv = floor(v_uv * u_resolution / ps) * ps / u_resolution;
   vec4 c = texture2D(u_texture, uv);
   vec2 pos = floor(v_uv * u_resolution / ps);
@@ -264,7 +264,7 @@ uniform float u_colorMode;
       `,
       `
   vec4 c = texture2D(u_texture, v_uv);
-  float size = max(u_dotSize, 2.0);
+  float size = max(u_dotSize, 2.0) * u_pixelScale;
   vec2 base = (v_uv - 0.5) * u_resolution;
   if (u_colorMode > 0.5) {
     vec2 pr = rotate2D(base, radians(u_angle));
@@ -386,7 +386,7 @@ uniform float u_radius;
       `,
       `
   vec4 c = texture2D(u_texture, v_uv);
-  vec2 texel = u_radius / u_resolution;
+  vec2 texel = u_radius * u_pixelScale / u_resolution;
   vec3 bloom = vec3(0.0);
   for (int i = 0; i < 12; i++) {
     float a = float(i) * 0.5235987756;
@@ -423,7 +423,7 @@ uniform float u_colorAmount;
       `,
       `
   vec4 c = texture2D(u_texture, v_uv);
-  vec2 p = v_uv * u_resolution / max(u_size, 0.1) + u_time * u_speed * 60.0;
+  vec2 p = v_uv * u_resolution / (max(u_size, 0.1) * u_pixelScale) + u_time * u_speed * 60.0;
   float g1 = hash12(floor(p));
   float g2 = hash12(floor(p) + 50.0);
   float g3 = hash12(floor(p) + 150.0);
@@ -747,12 +747,21 @@ uniform sampler2D u_charsetAtlas;
 uniform float u_charsetCount;
       `,
       `
-  vec2 cell = max(vec2(1.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(1.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellAdj = vec2(cell.x, cell.y * max(0.1, u_aspectCorrection));
   vec2 cellId = floor(v_uv * u_resolution / cellAdj);
   vec2 cellUV = mod(v_uv * u_resolution, cellAdj) / cellAdj - 0.5;
   vec2 sampleUV = (cellId + 0.5) * cellAdj / u_resolution;
+  // Average a small cross of taps across the cell instead of a single point sample -- a lone pixel
+  // is noisy on detailed photos (fine texture/grain), which fragmented the glyph choice into visual
+  // static instead of tracking the image's actual regional tone.
+  vec2 tapOff = cellAdj * 0.3 / u_resolution;
   vec4 src = texture2D(u_texture, sampleUV);
+  src += texture2D(u_texture, sampleUV + vec2(tapOff.x, 0.0));
+  src += texture2D(u_texture, sampleUV - vec2(tapOff.x, 0.0));
+  src += texture2D(u_texture, sampleUV + vec2(0.0, tapOff.y));
+  src += texture2D(u_texture, sampleUV - vec2(0.0, tapOff.y));
+  src *= 0.2;
   vec4 srcFull = texture2D(u_texture, v_uv);
 
   float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
@@ -927,11 +936,17 @@ float dreamGlyph(vec2 p, float level) {
 }
       `,
       `
-  vec2 cell = max(vec2(1.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(1.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cell);
   vec2 cellUV = mod(v_uv * u_resolution, cell) / cell - 0.5;
   vec2 sampleUV = (cellId + 0.5) * cell / u_resolution;
+  vec2 tapOff = cell * 0.3 / u_resolution;
   vec4 src = texture2D(u_texture, sampleUV);
+  src += texture2D(u_texture, sampleUV + vec2(tapOff.x, 0.0));
+  src += texture2D(u_texture, sampleUV - vec2(tapOff.x, 0.0));
+  src += texture2D(u_texture, sampleUV + vec2(0.0, tapOff.y));
+  src += texture2D(u_texture, sampleUV - vec2(0.0, tapOff.y));
+  src *= 0.2;
 
   float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
   lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
@@ -985,7 +1000,7 @@ uniform float u_jitter;
 uniform float u_colorMode;
       `,
       `
-  vec2 cell = max(vec2(2.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(2.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cell);
   vec2 cellUV = mod(v_uv * u_resolution, cell) / cell - 0.5;
   vec2 jitterOff = (vec2(hash12(cellId), hash12(cellId + 17.0)) - 0.5) * u_jitter * 0.7;
@@ -1046,7 +1061,7 @@ float hatchLine(vec2 p, float spacing, float width, float angle) {
   lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
 
   vec2 p = v_uv * u_resolution;
-  float spacing = max(u_lineSpacing, 2.0);
+  float spacing = max(u_lineSpacing, 2.0) * u_pixelScale;
   float width = spacing * u_lineWidth;
   float baseAngle = u_style > 0.5 ? 0.0 : radians(45.0);
   float h1 = hatchLine(p, spacing, width, baseAngle);
@@ -1113,7 +1128,7 @@ float bayerValue(vec2 p) {
 }
       `,
       `
-  float scale = max(u_scale, 1.0);
+  float scale = max(u_scale, 1.0) * u_pixelScale;
   vec2 blockPos = floor(v_uv * u_resolution / scale);
   vec2 sampleUV = clamp((blockPos + 0.5) * scale / u_resolution, 0.001, 0.999);
   vec4 src = texture2D(u_texture, sampleUV);
@@ -1187,7 +1202,7 @@ float bayerVal(vec2 p) {
 }
       `,
       `
-  vec2 cell = max(vec2(4.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(4.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cell);
   vec2 localPx = mod(v_uv * u_resolution, cell);
   vec2 sub = floor(localPx / cell * 4.0);
@@ -1234,7 +1249,7 @@ uniform float u_pixelSize;
 uniform float u_bitDepth;
       `,
       `
-  vec2 cell = max(vec2(1.0), vec2(u_pixelSize));
+  vec2 cell = max(vec2(1.0), vec2(u_pixelSize)) * u_pixelScale;
   vec2 uv = clamp((floor(v_uv * u_resolution / cell) + 0.5) * cell / u_resolution, 0.001, 0.999);
   vec4 src = texture2D(u_texture, uv);
   vec3 levels = u_bitDepth > 0.5 ? vec3(31.0, 63.0, 31.0) : vec3(7.0, 7.0, 3.0);
@@ -1261,7 +1276,7 @@ uniform float u_heightScale;
 uniform float u_gap;
       `,
       `
-  vec2 cell = max(vec2(2.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(2.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cell);
   vec2 p = mod(v_uv * u_resolution, cell) / cell - 0.5;
   vec2 sampleUV = clamp((cellId + 0.5) * cell / u_resolution, 0.001, 0.999);
@@ -1295,7 +1310,7 @@ uniform float u_cellSize;
 uniform float u_studSize;
       `,
       `
-  vec2 cell = max(vec2(4.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(4.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cell);
   vec2 p = mod(v_uv * u_resolution, cell) / cell - 0.5;
   vec2 sampleUV = clamp((cellId + 0.5) * cell / u_resolution, 0.001, 0.999);
@@ -1336,7 +1351,7 @@ uniform float u_groutWidth;
 uniform float u_variance;
       `,
       `
-  vec2 cell = max(vec2(2.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(2.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cell);
   vec2 p = mod(v_uv * u_resolution, cell) / cell - 0.5;
   vec2 sampleUV = clamp((cellId + 0.5) * cell / u_resolution, 0.001, 0.999);
@@ -1383,7 +1398,7 @@ uniform float u_contrast;
 uniform float u_colorMode;
       `,
       `
-  vec2 cell = max(vec2(2.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(2.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cell);
   vec2 p = mod(v_uv * u_resolution, cell) / cell;
   vec2 sampleUV = clamp((cellId + 0.5) * cell / u_resolution, 0.001, 0.999);
@@ -1455,12 +1470,18 @@ float brailleBayer(vec2 p) {
 }
       `,
       `
-  vec2 cellPx = vec2(max(u_cellSize, 4.0), max(u_cellSize, 4.0) * 2.0);
+  vec2 cellPx = vec2(max(u_cellSize, 4.0), max(u_cellSize, 4.0) * 2.0) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cellPx);
   vec2 localPx = mod(v_uv * u_resolution, cellPx);
   vec2 dotCoord = floor(localPx / cellPx * vec2(2.0, 4.0));
   vec2 sampleUV = clamp((cellId + 0.5) * cellPx / u_resolution, 0.001, 0.999);
+  vec2 tapOff = cellPx * 0.3 / u_resolution;
   vec4 src = texture2D(u_texture, sampleUV);
+  src += texture2D(u_texture, clamp(sampleUV + vec2(tapOff.x, 0.0), 0.001, 0.999));
+  src += texture2D(u_texture, clamp(sampleUV - vec2(tapOff.x, 0.0), 0.001, 0.999));
+  src += texture2D(u_texture, clamp(sampleUV + vec2(0.0, tapOff.y), 0.001, 0.999));
+  src += texture2D(u_texture, clamp(sampleUV - vec2(0.0, tapOff.y), 0.001, 0.999));
+  src *= 0.2;
 
   float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
   lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
@@ -1498,11 +1519,17 @@ uniform float u_colorful;
 uniform float u_hueSpeed;
       `,
       `
-  vec2 cell = max(vec2(6.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(6.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 cellId = floor(v_uv * u_resolution / cell);
   vec2 p = mod(v_uv * u_resolution, cell) / cell - 0.5;
   vec2 sampleUV = clamp((cellId + 0.5) * cell / u_resolution, 0.001, 0.999);
+  vec2 tapOff = cell * 0.3 / u_resolution;
   vec4 src = texture2D(u_texture, sampleUV);
+  src += texture2D(u_texture, clamp(sampleUV + vec2(tapOff.x, 0.0), 0.001, 0.999));
+  src += texture2D(u_texture, clamp(sampleUV - vec2(tapOff.x, 0.0), 0.001, 0.999));
+  src += texture2D(u_texture, clamp(sampleUV + vec2(0.0, tapOff.y), 0.001, 0.999));
+  src += texture2D(u_texture, clamp(sampleUV - vec2(0.0, tapOff.y), 0.001, 0.999));
+  src *= 0.2;
   float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
 
   float faceR = 0.34;
@@ -1545,7 +1572,7 @@ uniform float u_sparkle;
 uniform float u_speed;
       `,
       `
-  vec2 cell = max(vec2(6.0), vec2(u_cellSize));
+  vec2 cell = max(vec2(6.0), vec2(u_cellSize)) * u_pixelScale;
   vec2 p = v_uv * u_resolution;
   vec2 facetP = vec2((p.x + p.y) * 0.5, (p.x - p.y) * 0.5) / cell;
   vec2 facetId = floor(facetP);
@@ -1566,6 +1593,808 @@ uniform float u_speed;
   col += vec3(1.0) * sparkle * u_sparkle;
 
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), src.a);
+      `
+    ),
+  },
+  {
+    id: 'light-rays',
+    name: 'Light Rays',
+    category: 'Light',
+    description: 'Volumetric god-rays radiating from a bright source point.',
+    thumbnail: 'from-amber-200 via-yellow-400 to-orange-600',
+    params: [
+      { key: 'threshold', label: 'Threshold', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
+      { key: 'intensity', label: 'Intensity', type: 'float', default: 1, min: 0, max: 3, step: 0.01 },
+      { key: 'decay', label: 'Decay', type: 'float', default: 0.96, min: 0.8, max: 0.99, step: 0.005, advanced: true },
+      { key: 'sourceX', label: 'Source X', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'sourceY', label: 'Source Y', type: 'float', default: 0.15, min: 0, max: 1, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_threshold;
+uniform float u_intensity;
+uniform float u_decay;
+uniform float u_sourceX;
+uniform float u_sourceY;
+      `,
+      `
+  vec4 orig = texture2D(u_texture, v_uv);
+  vec2 lightPos = vec2(u_sourceX, u_sourceY);
+  vec2 delta = (v_uv - lightPos) / 24.0;
+  vec2 uv = v_uv;
+  float illum = 1.0;
+  vec3 accum = vec3(0.0);
+  for (int i = 0; i < 24; i++) {
+    uv -= delta;
+    vec3 samp = texture2D(u_texture, uv).rgb;
+    float lum = dot(samp, vec3(0.299, 0.587, 0.114));
+    float bright = max(lum - u_threshold, 0.0);
+    accum += samp * bright * illum;
+    illum *= u_decay;
+  }
+  accum /= 24.0;
+  vec3 col = orig.rgb + accum * u_intensity * 4.0;
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), orig.a);
+      `
+    ),
+  },
+  {
+    id: 'light-leak',
+    name: 'Light Leak',
+    category: 'Light',
+    description: 'Warm analog light streaks bleeding in across the frame.',
+    thumbnail: 'from-red-400 via-orange-400 to-yellow-200',
+    params: [
+      { key: 'intensity', label: 'Intensity', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
+      { key: 'angle', label: 'Angle', type: 'float', default: 45, min: 0, max: 360, step: 1, unit: '°' },
+      { key: 'spread', label: 'Spread', type: 'float', default: 0.5, min: 0.15, max: 1, step: 0.01, advanced: true },
+      { key: 'hue', label: 'Hue', type: 'float', default: 30, min: 0, max: 360, step: 1, advanced: true },
+      { key: 'speed', label: 'Drift Speed', type: 'float', default: 0.3, min: 0, max: 2, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_intensity;
+uniform float u_angle;
+uniform float u_spread;
+uniform float u_hue;
+uniform float u_speed;
+
+// Kept self-contained (no shared helpers) because this block is emitted before the shared
+// HELPERS block that defines hsv2rgb -- see hue-to-color conversion in main() below instead.
+float leakGlow(vec2 uv, vec2 center, float radius) {
+  float d = length(uv - center) / max(radius, 0.05);
+  return exp(-d * d * 2.2);
+}
+      `,
+      `
+  vec4 src = texture2D(u_texture, v_uv);
+  vec2 dir = vec2(cos(radians(u_angle)), sin(radians(u_angle)));
+  float drift = u_time * u_speed * 0.06;
+
+  vec3 leak = vec3(0.0);
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float along = fract(0.15 + fi * 0.4 + drift) * 1.8 - 0.4;
+    vec2 center = vec2(0.5) + dir * along;
+    float hue = fract(u_hue / 360.0 + fi * 0.07);
+    float glow = leakGlow(v_uv, center, u_spread) * (1.0 - fi * 0.22);
+    leak += hsv2rgb(vec3(hue, 0.8, 1.0)) * glow;
+  }
+
+  vec3 col = 1.0 - (1.0 - src.rgb) * (1.0 - clamp(leak * u_intensity, 0.0, 1.0));
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), src.a);
+      `
+    ),
+  },
+  {
+    id: 'digital-rain',
+    name: 'Digital Rain',
+    category: 'ASCII',
+    description: 'Matrix-style falling character streams over the image.',
+    thumbnail: 'from-black via-green-500 to-emerald-300',
+    usesCharsetAtlas: true,
+    params: [
+      { key: 'cellSize', label: 'Font Size', type: 'float', default: 14, min: 6, max: 32, step: 1 },
+      { key: 'characterSet', label: 'Character Set', type: 'select', default: 0, options: CHARACTER_SET_OPTIONS },
+      { key: 'customChars', label: 'Custom Characters', type: 'text', default: 0, defaultText: BUILTIN_CHARSETS.ASCII, visibleWhen: { key: 'characterSet', equals: 3 } },
+      { key: 'speed', label: 'Fall Speed', type: 'float', default: 1, min: 0, max: 4, step: 0.05 },
+      { key: 'density', label: 'Background', type: 'float', default: 0.35, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'glow', label: 'Head Glow', type: 'float', default: 0.7, min: 0, max: 1, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_cellSize;
+uniform float u_speed;
+uniform float u_density;
+uniform float u_glow;
+uniform sampler2D u_charsetAtlas;
+uniform float u_charsetCount;
+      `,
+      `
+  vec2 cell = max(vec2(1.0), vec2(u_cellSize)) * u_pixelScale;
+  vec2 cellId = floor(v_uv * u_resolution / cell);
+  vec2 cellUV = mod(v_uv * u_resolution, cell) / cell - 0.5;
+  vec2 sampleUV = (cellId + 0.5) * cell / u_resolution;
+  vec2 tapOff = cell * 0.3 / u_resolution;
+  vec4 src = texture2D(u_texture, sampleUV);
+  src += texture2D(u_texture, sampleUV + vec2(tapOff.x, 0.0));
+  src += texture2D(u_texture, sampleUV - vec2(tapOff.x, 0.0));
+  src += texture2D(u_texture, sampleUV + vec2(0.0, tapOff.y));
+  src += texture2D(u_texture, sampleUV - vec2(0.0, tapOff.y));
+  src *= 0.2;
+  float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+
+  float totalRows = max(1.0, floor(u_resolution.y / cell.y));
+  float colSeed = hash11(cellId.x * 13.17 + 4.7);
+  float colSpeed = (0.5 + colSeed * 1.3) * u_speed;
+  float phase = fract(cellId.y / totalRows - u_time * colSpeed * 0.25 + colSeed * 9.0);
+  float trail = pow(1.0 - phase, 5.0);
+  float isHead = smoothstep(0.05, 0.0, phase);
+
+  // Bias glyph choice toward the image's own luminance (denser glyphs on bright regions) so the
+  // photo reads through the rain, mixed with noise so the "typing" flicker still feels alive.
+  float glyphChangeRate = 2.0 + colSpeed * 3.0;
+  float glyphNoise = hash12(cellId + floor(u_time * glyphChangeRate));
+  float levelF = clamp(floor(mix(glyphNoise, lum, 0.65) * (u_charsetCount - 0.001)), 0.0, u_charsetCount - 1.001);
+  vec2 atlasUV = vec2((levelF + cellUV.x + 0.5) / u_charsetCount, cellUV.y + 0.5);
+  float cov = 0.0;
+  if (abs(cellUV.x) < 0.5 && abs(cellUV.y) < 0.5) {
+    cov = texture2D(u_charsetAtlas, atlasUV).a;
+  }
+
+  vec3 dimGreen = vec3(0.02, 0.16, 0.06) * (0.4 + lum * 0.6);
+  vec3 trailGreen = mix(vec3(0.05, 0.4, 0.15), vec3(0.5, 1.0, 0.6), trail);
+  vec3 glyphColor = mix(dimGreen, trailGreen, trail);
+  glyphColor = mix(glyphColor, vec3(0.85, 1.0, 0.92), isHead * u_glow);
+
+  vec3 background = mix(vec3(0.0), src.rgb * 0.18, u_density);
+  vec3 col = mix(background, glyphColor, cov);
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), src.a);
+      `
+    ),
+  },
+  {
+    id: 'halftone-print',
+    name: 'Halftone Print',
+    category: 'Texture',
+    description: 'Bold graphic dot screen that grows along the image\'s own contours, like litho print.',
+    thumbnail: 'from-white via-neutral-500 to-black',
+    params: [
+      { key: 'dotSize', label: 'Dot Size', type: 'float', default: 10, min: 3, max: 40, step: 0.5 },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.2, min: 0, max: 2, step: 0.01 },
+      { key: 'angle', label: 'Angle', type: 'float', default: 15, min: 0, max: 90, step: 1, advanced: true },
+      { key: 'sharpness', label: 'Contour Boost', type: 'float', default: 0.4, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'invert', label: 'Invert', type: 'bool', default: 0, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_dotSize;
+uniform float u_contrast;
+uniform float u_angle;
+uniform float u_sharpness;
+uniform float u_invert;
+      `,
+      `
+  vec4 c = texture2D(u_texture, v_uv);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+
+  vec2 texel = 1.0 / u_resolution;
+  float lumR = dot(texture2D(u_texture, v_uv + vec2(texel.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+  float lumD = dot(texture2D(u_texture, v_uv + vec2(0.0, texel.y)).rgb, vec3(0.299, 0.587, 0.114));
+  float edge = abs(lum - lumR) + abs(lum - lumD);
+  lum = clamp(lum - edge * u_sharpness * 1.5, 0.0, 1.0);
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+  if (u_invert > 0.5) lum = 1.0 - lum;
+
+  float size = max(u_dotSize, 2.0) * u_pixelScale;
+  vec2 base = (v_uv - 0.5) * u_resolution;
+  vec2 p = rotate2D(base, radians(u_angle));
+  float d = length(mod(p, size) - size * 0.5);
+  float radius = (1.0 - lum) * size * 0.62;
+  float m = 1.0 - smoothstep(radius - 1.0, radius, d);
+
+  gl_FragColor = vec4(vec3(1.0 - m), c.a);
+      `
+    ),
+  },
+  {
+    id: 'mesh-screen',
+    name: 'Mesh Screen',
+    category: 'Texture',
+    description: 'Fine woven line-screen texture over the full-color photo, like silk-screen fabric.',
+    thumbnail: 'from-pink-100 via-rose-300 to-purple-300',
+    params: [
+      { key: 'cellSize', label: 'Mesh Size', type: 'float', default: 6, min: 2, max: 20, step: 0.5 },
+      { key: 'opacity', label: 'Screen Strength', type: 'float', default: 0.6, min: 0, max: 1, step: 0.01 },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.1, min: 0, max: 2, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_cellSize;
+uniform float u_opacity;
+uniform float u_contrast;
+      `,
+      `
+  vec4 c = texture2D(u_texture, v_uv);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+
+  float size = max(u_cellSize, 2.0) * u_pixelScale;
+  vec2 p = v_uv * u_resolution;
+  float wx = sin(p.x / size * 6.28318530718) * 0.5 + 0.5;
+  float wy = sin(p.y / size * 6.28318530718) * 0.5 + 0.5;
+  float weave = wx * wy;
+  float meshDarken = (1.0 - weave) * (1.0 - lum);
+
+  vec3 col = c.rgb * (1.0 - meshDarken * u_opacity);
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), c.a);
+      `
+    ),
+  },
+  {
+    id: 'radial-halftone',
+    name: 'Radial Halftone',
+    category: 'Texture',
+    description: 'Concentric-ring line screen radiating from a point, like a vinyl-groove print.',
+    thumbnail: 'from-white via-red-400 to-red-700',
+    params: [
+      { key: 'spacing', label: 'Ring Spacing', type: 'float', default: 10, min: 3, max: 40, step: 0.5 },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.1, min: 0, max: 2, step: 0.01 },
+      { key: 'centerX', label: 'Center X', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'centerY', label: 'Center Y', type: 'float', default: 0.4, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'softness', label: 'Softness', type: 'float', default: 0.06, min: 0.01, max: 0.3, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_spacing;
+uniform float u_contrast;
+uniform float u_centerX;
+uniform float u_centerY;
+uniform float u_softness;
+      `,
+      `
+  vec4 c = texture2D(u_texture, v_uv);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+
+  vec2 center = vec2(u_centerX, u_centerY) * u_resolution;
+  float dist = length(v_uv * u_resolution - center);
+  float spacing = max(u_spacing, 2.0) * u_pixelScale;
+  float ringPhase = mod(dist, spacing) / spacing;
+  float d = abs(ringPhase - 0.5) * 2.0;
+  float thickness = clamp(1.0 - lum, 0.02, 0.98);
+  float soft = max(u_softness, 0.001);
+  float m = 1.0 - smoothstep(thickness - soft, thickness + soft, d);
+
+  gl_FragColor = vec4(vec3(1.0 - m), c.a);
+      `
+    ),
+  },
+  {
+    id: 'melt',
+    name: 'Melt',
+    category: 'Distortion',
+    description: 'Vertical columns stretch into dripping spikes below a jagged break line.',
+    thumbnail: 'from-amber-200 via-rose-400 to-rose-900',
+    params: [
+      { key: 'amount', label: 'Drip Length', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
+      { key: 'spikiness', label: 'Jaggedness', type: 'float', default: 0.6, min: 0, max: 1, step: 0.01 },
+      { key: 'spikeWidth', label: 'Spike Width', type: 'float', default: 6, min: 1, max: 30, step: 1, advanced: true },
+      { key: 'seed', label: 'Seed', type: 'float', default: 0, min: 0, max: 100, step: 1, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_amount;
+uniform float u_spikiness;
+uniform float u_spikeWidth;
+uniform float u_seed;
+      `,
+      `
+  float bandSize = max(u_spikeWidth, 1.0) * u_pixelScale;
+  float band = floor(v_uv.x * u_resolution.x / bandSize);
+  // Most bands stay untouched (gated off) so the drip reads as sparse, isolated spikes rather than
+  // a uniform curtain -- only bands that pass the gate get a (randomly sized) drip at all.
+  float gateRoll = hash11(band * 12.9898 + u_seed * 7.31 + 4.7);
+  float gateThreshold = mix(0.96, 0.45, u_amount);
+  float gated = step(gateThreshold, gateRoll);
+  float lenRoll = hash11(band * 5.171 + u_seed * 2.63 + 9.4);
+  float meltLen = gated * pow(lenRoll, 1.0 + u_spikiness * 4.0) * mix(0.2, 0.95, u_amount);
+  float breakPoint = 1.0 - meltLen;
+
+  vec2 uv = v_uv;
+  if (uv.y > breakPoint) {
+    float t = uv.y - breakPoint;
+    uv.y = clamp(breakPoint - t * 0.04, 0.0, breakPoint);
+  }
+  gl_FragColor = texture2D(u_texture, uv);
+      `
+    ),
+  },
+  {
+    id: 'duotone-halftone',
+    name: 'Duotone Halftone',
+    category: 'Texture',
+    description: 'Bold two-color halftone dot screen, like a risograph or duotone poster print.',
+    thumbnail: 'from-rose-600 via-rose-800 to-slate-900',
+    params: [
+      { key: 'dotSize', label: 'Dot Size', type: 'float', default: 8, min: 2, max: 30, step: 0.5 },
+      { key: 'colorA', label: 'Shadow Color', type: 'color', default: 14690650, group: 'Color' },
+      { key: 'colorB', label: 'Highlight Color', type: 'color', default: 1316902, group: 'Color' },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.1, min: 0, max: 2, step: 0.01, advanced: true },
+      { key: 'angle', label: 'Angle', type: 'float', default: 15, min: 0, max: 90, step: 1, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_dotSize;
+uniform float u_colorA;
+uniform float u_colorB;
+uniform float u_contrast;
+uniform float u_angle;
+      `,
+      `
+  vec4 c = texture2D(u_texture, v_uv);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+
+  float size = max(u_dotSize, 2.0) * u_pixelScale;
+  vec2 base = (v_uv - 0.5) * u_resolution;
+  vec2 p = rotate2D(base, radians(u_angle));
+  float d = length(mod(p, size) - size * 0.5);
+  float radius = (1.0 - lum) * size * 0.62;
+  float m = 1.0 - smoothstep(radius - 1.0, radius, d);
+
+  vec3 colA = unpackColor(u_colorA);
+  vec3 colB = unpackColor(u_colorB);
+  vec3 col = mix(colB, colA, m);
+  gl_FragColor = vec4(col, c.a);
+      `
+    ),
+  },
+  {
+    id: 'ink-stipple',
+    name: 'Ink Stipple',
+    category: 'DreamLight',
+    description: 'Fine engraving-style stipple: many uniform dots, density carrying the tone.',
+    thumbnail: 'from-neutral-50 via-neutral-300 to-neutral-950',
+    params: [
+      { key: 'fineness', label: 'Dot Pitch', type: 'float', default: 4, min: 2, max: 12, step: 0.5 },
+      { key: 'density', label: 'Density', type: 'float', default: 1.4, min: 0.5, max: 3, step: 0.05 },
+      { key: 'dotSize', label: 'Dot Size', type: 'float', default: 0.5, min: 0.2, max: 0.9, step: 0.01, advanced: true },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.2, min: 0, max: 2, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_fineness;
+uniform float u_density;
+uniform float u_dotSize;
+uniform float u_contrast;
+      `,
+      `
+  vec2 pitch = vec2(max(u_fineness, 2.0)) * u_pixelScale;
+  vec2 cellId = floor(v_uv * u_resolution / pitch);
+  vec2 jitter = vec2(hash12(cellId), hash12(cellId + 31.7)) - 0.5;
+  vec2 dotCenterUV = (cellId + 0.5 + jitter * 0.7) * pitch / u_resolution;
+  vec4 src = texture2D(u_texture, clamp(dotCenterUV, 0.001, 0.999));
+  float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+  float darkness = 1.0 - lum;
+
+  float threshold = hash12(cellId + 91.3);
+  float show = step(threshold, darkness * u_density);
+
+  vec2 cellUV = mod(v_uv * u_resolution, pitch) / pitch - 0.5;
+  vec2 localOffset = cellUV - jitter * 0.7;
+  float d = length(localOffset);
+  float radius = max(u_dotSize, 0.05) * 0.5;
+  float cov = (1.0 - smoothstep(radius - 0.06, radius, d)) * show;
+
+  vec3 col = mix(vec3(0.98), vec3(0.05), cov);
+  gl_FragColor = vec4(col, src.a);
+      `
+    ),
+  },
+  {
+    id: 'vhs-static',
+    name: 'VHS Static',
+    category: 'Retro',
+    description: 'Crushed-contrast analog broadcast noise with jittery scanlines and tracking glitches.',
+    thumbnail: 'from-white via-neutral-600 to-black',
+    params: [
+      { key: 'noiseAmount', label: 'Static', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.6, min: 0.5, max: 3, step: 0.01 },
+      { key: 'scanlineJitter', label: 'Line Jitter', type: 'float', default: 0.3, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'lineCount', label: 'Line Count', type: 'float', default: 400, min: 100, max: 800, step: 10, advanced: true },
+      { key: 'speed', label: 'Speed', type: 'float', default: 1, min: 0, max: 5, step: 0.05, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_noiseAmount;
+uniform float u_contrast;
+uniform float u_scanlineJitter;
+uniform float u_lineCount;
+uniform float u_speed;
+      `,
+      `
+  float t = u_time * u_speed;
+  float row = floor(v_uv.y * u_lineCount);
+  float rowNoise = hash11(row * 3.17 + floor(t * 8.0));
+  float xJitter = (rowNoise - 0.5) * u_scanlineJitter * 0.02;
+  vec2 uv = vec2(v_uv.x + xJitter, v_uv.y);
+
+  vec4 c = texture2D(u_texture, clamp(uv, 0.0, 1.0));
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+
+  vec2 noiseUV = v_uv * u_resolution + t * 137.0;
+  float grain = hash12(floor(noiseUV));
+  lum = clamp(lum + (grain - 0.5) * u_noiseAmount, 0.0, 1.0);
+
+  float trackLine = step(0.995, hash11(floor(t * 6.0) + 5.2));
+  float trackY = hash11(floor(t * 6.0) + 9.1);
+  float nearTrack = 1.0 - smoothstep(0.0, 0.02, abs(v_uv.y - trackY));
+  lum = mix(lum, 1.0, trackLine * nearTrack * 0.8);
+
+  vec3 col = vec3(lum);
+  gl_FragColor = vec4(col, c.a);
+      `
+    ),
+  },
+  {
+    id: 'fluted-glass',
+    name: 'Fluted Glass',
+    category: 'Glass',
+    description: 'Reeded glass ribs that bend the image like a lens, column by column.',
+    thumbnail: 'from-sky-100 via-cyan-200 to-slate-300',
+    params: [
+      { key: 'ribWidth', label: 'Rib Width', type: 'float', default: 24, min: 6, max: 80, step: 1 },
+      { key: 'amount', label: 'Distortion', type: 'float', default: 0.6, min: 0, max: 1, step: 0.01 },
+      { key: 'angle', label: 'Angle', type: 'float', default: 0, min: 0, max: 180, step: 1, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_ribWidth;
+uniform float u_amount;
+uniform float u_angle;
+      `,
+      `
+  vec2 dir = vec2(cos(radians(u_angle)), sin(radians(u_angle)));
+  float ribSize = max(u_ribWidth, 2.0) * u_pixelScale;
+  float along = dot(v_uv * u_resolution, dir);
+  float ribPos = fract(along / ribSize) - 0.5;
+  float lens = ribPos * (1.0 - abs(ribPos) * 1.3);
+  vec2 uv = v_uv + dir * lens * u_amount * 0.05;
+  gl_FragColor = texture2D(u_texture, clamp(uv, 0.0, 1.0));
+      `
+    ),
+  },
+  {
+    id: 'frosted-glass',
+    name: 'Frosted Glass',
+    category: 'Glass',
+    description: 'Soft blur behind a milky, translucent haze, like satin glass.',
+    thumbnail: 'from-white via-slate-200 to-slate-400',
+    params: [
+      { key: 'blurAmount', label: 'Frost Amount', type: 'float', default: 8, min: 1, max: 30, step: 0.5 },
+      { key: 'haze', label: 'Haze', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
+      { key: 'grain', label: 'Grain', type: 'float', default: 0.15, min: 0, max: 1, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_blurAmount;
+uniform float u_haze;
+uniform float u_grain;
+      `,
+      `
+  vec2 texel = u_blurAmount * u_pixelScale / u_resolution;
+  vec3 sum = vec3(0.0);
+  float wsum = 0.0;
+  for (int i = -2; i <= 2; i++) {
+    for (int j = -2; j <= 2; j++) {
+      vec2 off = vec2(float(i), float(j)) * texel;
+      float w = 1.0 / (1.0 + float(i * i + j * j));
+      sum += texture2D(u_texture, clamp(v_uv + off, 0.0, 1.0)).rgb * w;
+      wsum += w;
+    }
+  }
+  vec3 blurred = sum / wsum;
+  vec3 col = mix(blurred, vec3(1.0), u_haze * 0.35);
+  col = mix(vec3(dot(col, vec3(0.333))), col, 1.0 - u_haze * 0.3);
+  float g = hash12(v_uv * u_resolution * 0.5 + u_time * 0.02) - 0.5;
+  col += g * u_grain * 0.05;
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), texture2D(u_texture, v_uv).a);
+      `
+    ),
+  },
+  {
+    id: 'prism-glass',
+    name: 'Prism Glass',
+    category: 'Glass',
+    description: 'Faceted crystal refraction with chromatic fringing and bright shard seams.',
+    thumbnail: 'from-cyan-200 via-fuchsia-200 to-amber-200',
+    params: [
+      { key: 'facetSize', label: 'Facet Size', type: 'float', default: 40, min: 10, max: 120, step: 1 },
+      { key: 'refraction', label: 'Refraction', type: 'float', default: 0.6, min: 0, max: 2, step: 0.01 },
+      { key: 'chroma', label: 'Chromatic Split', type: 'float', default: 0.4, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'shine', label: 'Edge Shine', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_facetSize;
+uniform float u_refraction;
+uniform float u_chroma;
+uniform float u_shine;
+      `,
+      `
+  float size = max(u_facetSize, 8.0) * u_pixelScale;
+  vec2 p = v_uv * u_resolution;
+  vec2 cellId = floor(p / size);
+  vec2 cellUV = fract(p / size) - 0.5;
+
+  float ang = hash12(cellId) * 6.28318530718;
+  vec2 tilt = vec2(cos(ang), sin(ang));
+  vec2 baseOffset = tilt * u_refraction * 0.02;
+
+  vec2 uvR = clamp(v_uv + baseOffset * (1.0 + u_chroma), 0.0, 1.0);
+  vec2 uvG = clamp(v_uv + baseOffset, 0.0, 1.0);
+  vec2 uvB = clamp(v_uv + baseOffset * (1.0 - u_chroma), 0.0, 1.0);
+  float r = texture2D(u_texture, uvR).r;
+  float g = texture2D(u_texture, uvG).g;
+  float b = texture2D(u_texture, uvB).b;
+  float a = texture2D(u_texture, uvG).a;
+
+  vec2 edgeDist = 0.5 - abs(cellUV);
+  float edge = 1.0 - smoothstep(0.0, 0.08, min(edgeDist.x, edgeDist.y));
+  vec3 col = vec3(r, g, b) + edge * u_shine * 0.5;
+
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), a);
+      `
+    ),
+  },
+  {
+    id: 'string-art',
+    name: 'String Art',
+    category: 'Texture',
+    description: 'Continuous wavy vertical lines whose thickness traces the image, like cut-paper thread art.',
+    thumbnail: 'from-white via-neutral-400 to-black',
+    params: [
+      { key: 'lineSpacing', label: 'Line Spacing', type: 'float', default: 8, min: 3, max: 30, step: 0.5 },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.3, min: 0, max: 2.5, step: 0.01 },
+      { key: 'waviness', label: 'Waviness', type: 'float', default: 0.4, min: 0, max: 1, step: 0.01 },
+      { key: 'jaggedness', label: 'Edge Jaggedness', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_lineSpacing;
+uniform float u_contrast;
+uniform float u_waviness;
+uniform float u_jaggedness;
+      `,
+      `
+  float spacing = max(u_lineSpacing, 3.0) * u_pixelScale;
+  float lineIdx = floor(v_uv.x * u_resolution.x / spacing);
+  float lineCenterX = (lineIdx + 0.5) * spacing;
+
+  float wobble = (vnoise(vec2(lineIdx * 0.3, v_uv.y * 6.0)) - 0.5) * u_waviness * spacing * 0.6;
+  float px = v_uv.x * u_resolution.x;
+  float distFromCenter = px - (lineCenterX + wobble);
+
+  vec2 sampleUV = vec2(clamp((lineCenterX + wobble) / u_resolution.x, 0.001, 0.999), v_uv.y);
+  vec4 src = texture2D(u_texture, sampleUV);
+  float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+  float thickness = (1.0 - lum) * spacing * 0.9;
+
+  float edgeJitter = (vnoise(vec2(lineIdx * 5.3, v_uv.y * 40.0)) - 0.5) * u_jaggedness * spacing * 0.3;
+  thickness = max(0.0, thickness + edgeJitter);
+
+  float m = 1.0 - smoothstep(thickness * 0.5 - 1.0, thickness * 0.5, abs(distFromCenter));
+  gl_FragColor = vec4(vec3(1.0 - m), src.a);
+      `
+    ),
+  },
+  {
+    id: 'dot-portrait',
+    name: 'Dot Portrait',
+    category: 'Texture',
+    description: 'Bold, evenly-gridded pop-art dot screen -- clean high-contrast poster halftone.',
+    thumbnail: 'from-white via-neutral-500 to-black',
+    params: [
+      { key: 'dotSize', label: 'Dot Size', type: 'float', default: 14, min: 4, max: 40, step: 0.5 },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.4, min: 0, max: 2.5, step: 0.01 },
+      { key: 'invert', label: 'Invert', type: 'bool', default: 0, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_dotSize;
+uniform float u_contrast;
+uniform float u_invert;
+      `,
+      `
+  vec4 c = texture2D(u_texture, v_uv);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+  if (u_invert > 0.5) lum = 1.0 - lum;
+
+  float size = max(u_dotSize, 3.0) * u_pixelScale;
+  vec2 p = mod(v_uv * u_resolution, size) - size * 0.5;
+  float d = length(p);
+  float radius = (1.0 - lum) * size * 0.62;
+  float m = 1.0 - smoothstep(radius - 1.0, radius, d);
+
+  gl_FragColor = vec4(vec3(1.0 - m), c.a);
+      `
+    ),
+  },
+  {
+    id: 'anime-cel',
+    name: 'Anime Cel',
+    category: 'Color',
+    description: 'Vivid cel-shaded color grade: flat tonal bands, punchy contrast, orange/teal split-tone.',
+    thumbnail: 'from-orange-400 via-slate-700 to-teal-500',
+    params: [
+      { key: 'saturation', label: 'Saturation', type: 'float', default: 1.4, min: 0, max: 2.5, step: 0.01 },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.25, min: 0, max: 2.5, step: 0.01 },
+      { key: 'celBands', label: 'Cel Bands', type: 'float', default: 10, min: 3, max: 32, step: 1, advanced: true },
+      { key: 'splitTone', label: 'Split Tone', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'lineStrength', label: 'Ink Lines', type: 'float', default: 0.3, min: 0, max: 1, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_saturation;
+uniform float u_contrast;
+uniform float u_celBands;
+uniform float u_splitTone;
+uniform float u_lineStrength;
+      `,
+      `
+  vec4 c = texture2D(u_texture, v_uv);
+  vec3 col = c.rgb;
+
+  col = (col - 0.5) * u_contrast + 0.5;
+
+  float lum = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(lum), col, u_saturation);
+
+  vec3 teal = vec3(0.0, 0.35, 0.4);
+  vec3 orange = vec3(1.0, 0.55, 0.15);
+  vec3 tint = mix(teal, orange, clamp(lum, 0.0, 1.0));
+  col = mix(col, col * 0.5 + tint * 0.5, u_splitTone * 0.5);
+
+  float bands = max(u_celBands, 2.0);
+  col = floor(col * bands + 0.5) / bands;
+
+  vec2 texel = 1.0 / u_resolution;
+  float lumR = dot(texture2D(u_texture, v_uv + vec2(texel.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+  float lumD = dot(texture2D(u_texture, v_uv + vec2(0.0, texel.y)).rgb, vec3(0.299, 0.587, 0.114));
+  float edge = abs(lum - lumR) + abs(lum - lumD);
+  col *= 1.0 - clamp(edge * u_lineStrength * 4.0, 0.0, 0.85);
+
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), c.a);
+      `
+    ),
+  },
+  {
+    id: 'bitmap-dither',
+    name: 'Bit Map',
+    category: 'Texture',
+    description: 'Stochastic pixel dithering, like a classic bitmap-mode diffusion dither conversion.',
+    thumbnail: 'from-white via-neutral-400 to-black',
+    params: [
+      { key: 'dotPitch', label: 'Dot Size', type: 'float', default: 2, min: 1, max: 8, step: 0.5 },
+      { key: 'contrast', label: 'Contrast', type: 'float', default: 1.1, min: 0, max: 2, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_dotPitch;
+uniform float u_contrast;
+      `,
+      `
+  float pitch = max(u_dotPitch, 1.0) * u_pixelScale;
+  vec2 cellId = floor(v_uv * u_resolution / pitch);
+  vec2 sampleUV = clamp((cellId + 0.5) * pitch / u_resolution, 0.001, 0.999);
+  vec4 c = texture2D(u_texture, sampleUV);
+  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+  lum = clamp((lum - 0.5) * u_contrast + 0.5, 0.0, 1.0);
+
+  float threshold = hash12(cellId + 0.5);
+  float bit = step(threshold, lum);
+
+  gl_FragColor = vec4(vec3(bit), c.a);
+      `
+    ),
+  },
+  {
+    id: 'pixel-bloom',
+    name: 'Pixel Bloom',
+    category: 'Distortion',
+    description: 'Chunky pixelation with color streaks bleeding outward from the frame edges.',
+    thumbnail: 'from-black via-rose-400 to-pink-200',
+    params: [
+      { key: 'pixelSize', label: 'Pixel Size', type: 'float', default: 6, min: 2, max: 24, step: 1 },
+      { key: 'streakAmount', label: 'Streak Amount', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
+      { key: 'sparsity', label: 'Streak Sparsity', type: 'float', default: 0.6, min: 0, max: 1, step: 0.01, advanced: true },
+      { key: 'seed', label: 'Seed', type: 'float', default: 0, min: 0, max: 100, step: 1, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_pixelSize;
+uniform float u_streakAmount;
+uniform float u_sparsity;
+uniform float u_seed;
+      `,
+      `
+  vec2 blockSize = max(vec2(1.0), vec2(u_pixelSize)) * u_pixelScale;
+  vec2 pv = (floor(v_uv * u_resolution / blockSize) + 0.5) * blockSize / u_resolution;
+
+  float bandSize = max(u_pixelSize, 1.0) * u_pixelScale;
+  float row = floor(v_uv.y * u_resolution.y / bandSize);
+  float gateRoll = hash11(row * 7.13 + u_seed * 3.7 + 1.1);
+  float gated = step(mix(0.96, 0.4, u_streakAmount), gateRoll);
+  float lenRoll = hash11(row * 2.71 + u_seed * 5.2 + 8.3);
+  float streakLen = gated * pow(lenRoll, 1.0 + u_sparsity * 4.0) * mix(0.15, 0.9, u_streakAmount);
+  float fromRight = step(0.5, hash11(row * 4.61 + u_seed * 1.9 + 3.3));
+
+  vec2 uv = pv;
+  if (fromRight < 0.5) {
+    if (uv.x < streakLen) {
+      float t = streakLen - uv.x;
+      uv.x = clamp(streakLen + t * 0.05, streakLen, 1.0);
+    }
+  } else {
+    float edge = 1.0 - streakLen;
+    if (uv.x > edge) {
+      float t = uv.x - edge;
+      uv.x = clamp(edge - t * 0.05, 0.0, edge);
+    }
+  }
+  gl_FragColor = texture2D(u_texture, uv);
+      `
+    ),
+  },
+  {
+    id: 'dot-bloom',
+    name: 'Dot Bloom',
+    category: 'DreamLight',
+    description: 'Soft blurred glow with a luminance-gated white dot mesh over the highlights.',
+    thumbnail: 'from-teal-200 via-pink-200 to-orange-200',
+    params: [
+      { key: 'blurAmount', label: 'Blur', type: 'float', default: 6, min: 0, max: 20, step: 0.5 },
+      { key: 'dotOpacity', label: 'Dot Opacity', type: 'float', default: 0.7, min: 0, max: 1, step: 0.01 },
+      { key: 'dotSize', label: 'Dot Size', type: 'float', default: 10, min: 3, max: 30, step: 0.5, advanced: true },
+      { key: 'threshold', label: 'Dot Threshold', type: 'float', default: 0.35, min: 0, max: 1, step: 0.01, advanced: true },
+    ],
+    fragmentShader: buildFragmentShader(
+      `
+uniform float u_blurAmount;
+uniform float u_dotOpacity;
+uniform float u_dotSize;
+uniform float u_threshold;
+      `,
+      `
+  vec2 texel = u_blurAmount * u_pixelScale / u_resolution;
+  vec3 sum = vec3(0.0);
+  float wsum = 0.0;
+  for (int i = -2; i <= 2; i++) {
+    for (int j = -2; j <= 2; j++) {
+      vec2 off = vec2(float(i), float(j)) * texel;
+      float w = 1.0 / (1.0 + float(i * i + j * j));
+      sum += texture2D(u_texture, clamp(v_uv + off, 0.0, 1.0)).rgb * w;
+      wsum += w;
+    }
+  }
+  vec3 blurred = sum / wsum;
+
+  float size = max(u_dotSize, 2.0) * u_pixelScale;
+  vec2 base = (v_uv - 0.5) * u_resolution;
+  vec2 p = mod(base, size) - size * 0.5;
+  float lum = dot(blurred, vec3(0.299, 0.587, 0.114));
+  float showDot = smoothstep(u_threshold - 0.15, u_threshold + 0.15, lum);
+  float radius = showDot * size * 0.22;
+  float d = length(p);
+  float dotMask = 1.0 - smoothstep(radius - 1.0, radius, d);
+
+  vec3 col = blurred + dotMask * u_dotOpacity;
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
       `
     ),
   },

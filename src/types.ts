@@ -32,6 +32,7 @@ export type ShaderCategory =
   | 'Color'
   | 'Texture'
   | 'Light'
+  | 'Glass'
   | 'ASCII'
   | 'DreamLight'
   | 'Custom';

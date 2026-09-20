@@ -13,6 +13,11 @@ varying vec2 v_uv;
 uniform sampler2D u_texture;
 uniform vec2 u_resolution;
 uniform float u_time;
+// Scales any "pixel-space" quantity (cell size, block size, offset in pixels, ...) so an effect's
+// visual density stays consistent between the (usually downscaled) live preview and a higher- or
+// lower-resolution export: 1.0 at PIXEL_SCALE_REFERENCE_HEIGHT (see renderer.ts), scaling up/down
+// from there with actual render height. Aspect-ratio-only uses of u_resolution don't need this.
+uniform float u_pixelScale;
 `;
 
 const HELPERS = `
