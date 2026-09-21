@@ -12,8 +12,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useState } from 'react';
 import clsx from 'clsx';
-import { Copy, GripVertical, Layers, RotateCcw, X } from 'lucide-react';
+import { Check, Copy, GripVertical, Layers, RotateCcw, Save, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { StackItem } from '../types';
 
@@ -21,6 +22,11 @@ export default function StackBar() {
   const stack = useStore((s) => s.stack);
   const setStackOrder = useStore((s) => s.setStackOrder);
   const clearStack = useStore((s) => s.clearStack);
+  const saveStackAsPreset = useStore((s) => s.saveStackAsPreset);
+  const setActiveTab = useStore((s) => s.setActiveTab);
+
+  const [isNamingPreset, setIsNamingPreset] = useState(false);
+  const [presetName, setPresetName] = useState('');
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -37,25 +43,74 @@ export default function StackBar() {
     setStackOrder(next);
   }
 
+  function commitSavePreset() {
+    saveStackAsPreset(presetName);
+    setIsNamingPreset(false);
+    setPresetName('');
+    setActiveTab('presets');
+  }
+
   return (
     <div className="glass flex h-[210px] w-full flex-col rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-neutral-200 dark:border-neutral-800">
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-          <Layers size={12} />
-          Shader Stack
-          {stack.length > 0 && (
-            <span className="rounded-full bg-black/[0.06] dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-medium normal-case text-neutral-500 dark:text-neutral-400">
-              {stack.length}
-            </span>
-          )}
-        </div>
-        {stack.length > 0 && (
-          <button
-            onClick={clearStack}
-            className="text-[10.5px] font-medium text-neutral-400 hover:text-red-500 transition-colors"
-          >
-            Clear all
-          </button>
+      <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-neutral-200 dark:border-neutral-800">
+        {isNamingPreset ? (
+          <div className="flex flex-1 items-center gap-1.5">
+            <input
+              autoFocus
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitSavePreset();
+                if (e.key === 'Escape') setIsNamingPreset(false);
+              }}
+              placeholder="Preset name..."
+              className="min-w-0 flex-1 rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-2 py-1 text-[12px] text-neutral-800 dark:text-neutral-100 placeholder:text-neutral-400 outline-none focus:ring-1 focus:ring-neutral-400 dark:focus:ring-white/30"
+            />
+            <button
+              onClick={commitSavePreset}
+              title="Save preset"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-neutral-500 hover:bg-black/[0.06] hover:text-neutral-900 dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              <Check size={13} />
+            </button>
+            <button
+              onClick={() => setIsNamingPreset(false)}
+              title="Cancel"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-black/[0.06] hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+              <Layers size={12} />
+              Shader Stack
+              {stack.length > 0 && (
+                <span className="rounded-full bg-black/[0.06] dark:bg-white/10 px-1.5 py-0.5 text-[10px] font-medium normal-case text-neutral-500 dark:text-neutral-400">
+                  {stack.length}
+                </span>
+              )}
+            </div>
+            {stack.length > 0 && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsNamingPreset(true)}
+                  title="Save this stack as a preset"
+                  className="flex items-center gap-1 text-[10.5px] font-medium text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-100 transition-colors"
+                >
+                  <Save size={11} />
+                  Save as Preset
+                </button>
+                <button
+                  onClick={clearStack}
+                  className="text-[10.5px] font-medium text-neutral-400 hover:text-red-500 transition-colors"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 

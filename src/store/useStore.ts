@@ -28,6 +28,27 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+const USER_PRESETS_KEY = 'stencil-user-presets';
+
+function loadUserPresets(): PresetDef[] {
+  try {
+    const raw = localStorage.getItem(USER_PRESETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUserPresets(presets: PresetDef[]) {
+  try {
+    localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(presets));
+  } catch {
+    // localStorage unavailable (private mode, quota, etc.) -- preset just won't persist across reloads.
+  }
+}
+
 function loadImageElement(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -80,6 +101,9 @@ interface StencilState {
 
   // presets
   loadPreset: (preset: PresetDef) => void;
+  userPresets: PresetDef[];
+  saveStackAsPreset: (name: string) => void;
+  deleteUserPreset: (id: string) => void;
 
   // custom shaders
   customShaders: ShaderDef[];
@@ -291,11 +315,42 @@ export const useStore = create<StencilState>((set, get) => ({
       .map((s) => ({
         instanceId: uid(),
         shaderId: s.shaderId,
-        enabled: true,
+        enabled: s.enabled ?? true,
         params: { ...defaultParams(defs[s.shaderId]), ...s.params },
-        textParams: defaultTextParams(defs[s.shaderId]),
+        textParams: { ...defaultTextParams(defs[s.shaderId]), ...s.textParams },
       }));
     set({ stack, selectedInstanceId: stack.length ? stack[0].instanceId : null, activeTab: 'effects' });
+  },
+
+  userPresets: loadUserPresets(),
+
+  saveStackAsPreset: (name) => {
+    const state = get();
+    if (state.stack.length === 0) return;
+    const defs = state.allShaderDefs();
+    const trimmed = name.trim();
+    const preset: PresetDef = {
+      id: `user-${uid()}`,
+      name: trimmed || 'Untitled Stack',
+      description: state.stack.map((i) => defs[i.shaderId]?.name ?? i.shaderId).join(' → '),
+      thumbnail: defs[state.stack[0].shaderId]?.thumbnail ?? 'from-neutral-500 via-neutral-700 to-neutral-900',
+      custom: true,
+      stack: state.stack.map((i) => ({
+        shaderId: i.shaderId,
+        params: { ...i.params },
+        textParams: { ...i.textParams },
+        enabled: i.enabled,
+      })),
+    };
+    const userPresets = [...state.userPresets, preset];
+    saveUserPresets(userPresets);
+    set({ userPresets });
+  },
+
+  deleteUserPreset: (id) => {
+    const userPresets = get().userPresets.filter((p) => p.id !== id);
+    saveUserPresets(userPresets);
+    set({ userPresets });
   },
 
   customShaders: [],

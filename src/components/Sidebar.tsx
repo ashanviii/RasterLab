@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Search, Sparkles } from 'lucide-react';
+import { Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../store/useStore';
 import { BUILTIN_SHADERS } from '../shaders/registry';
 import { PRESETS } from '../shaders/presets';
-import type { ShaderCategory } from '../types';
+import type { PresetDef, ShaderCategory } from '../types';
 import ShaderListItem from './ShaderListItem';
 import CustomShaderEditor from './CustomShaderEditor';
 
@@ -35,6 +35,8 @@ export default function Sidebar() {
   const setActiveCategory = useStore((s) => s.setActiveCategory);
   const addShaderToStack = useStore((s) => s.addShaderToStack);
   const loadPreset = useStore((s) => s.loadPreset);
+  const userPresets = useStore((s) => s.userPresets);
+  const deleteUserPreset = useStore((s) => s.deleteUserPreset);
   const customShaders = useStore((s) => s.customShaders);
   const createCustomShader = useStore((s) => s.createCustomShader);
 
@@ -139,21 +141,26 @@ export default function Sidebar() {
 
           {activeTab === 'presets' && (
             <div className="scroll-thin flex-1 overflow-y-auto p-2.5">
+              {userPresets.length > 0 && (
+                <div className="mb-3">
+                  <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-neutral-400">
+                    My Presets
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {userPresets.map((preset) => (
+                      <PresetCard
+                        key={preset.id}
+                        preset={preset}
+                        onClick={() => loadPreset(preset)}
+                        onDelete={() => deleteUserPreset(preset.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 {PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    onClick={() => loadPreset(preset)}
-                    className="group flex flex-col overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/40 dark:bg-white/[0.03] text-left hover:border-neutral-400 dark:hover:border-white/30 hover:shadow-sm transition-all duration-150"
-                  >
-                    <div className={`h-16 w-full bg-gradient-to-br ${preset.thumbnail}`} />
-                    <div className="p-2">
-                      <div className="text-[12px] font-medium text-neutral-800 dark:text-neutral-100">{preset.name}</div>
-                      <div className="mt-0.5 text-[10.5px] leading-snug text-neutral-400 line-clamp-2">
-                        {preset.description}
-                      </div>
-                    </div>
-                  </button>
+                  <PresetCard key={preset.id} preset={preset} onClick={() => loadPreset(preset)} />
                 ))}
               </div>
             </div>
@@ -198,5 +205,48 @@ export default function Sidebar() {
         </>
       )}
     </aside>
+  );
+}
+
+function PresetCard({
+  preset,
+  onClick,
+  onDelete,
+}: {
+  preset: PresetDef;
+  onClick: () => void;
+  onDelete?: () => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/40 dark:bg-white/[0.03] text-left hover:border-neutral-400 dark:hover:border-white/30 hover:shadow-sm transition-all duration-150"
+    >
+      <div className={`h-16 w-full bg-gradient-to-br ${preset.thumbnail}`} />
+      {onDelete && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title={`Delete ${preset.name}`}
+          className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 dark:bg-neutral-900/80 text-neutral-500 opacity-0 shadow-sm ring-1 ring-black/5 dark:ring-white/10 transition-all duration-150 group-hover:opacity-100 hover:!bg-red-500 hover:!text-white"
+        >
+          <Trash2 size={12} />
+        </button>
+      )}
+      <div className="p-2">
+        <div className="truncate text-[12px] font-medium text-neutral-800 dark:text-neutral-100">{preset.name}</div>
+        <div className="mt-0.5 text-[10.5px] leading-snug text-neutral-400 line-clamp-2">{preset.description}</div>
+      </div>
+    </div>
   );
 }

@@ -71,5 +71,12 @@ export interface PresetDef {
   name: string;
   description: string;
   thumbnail: string;
-  stack: { shaderId: string; params: Record<string, number> }[];
+  stack: {
+    shaderId: string;
+    params: Record<string, number>;
+    textParams?: Record<string, string>;
+    enabled?: boolean;
+  }[];
+  /** User-saved preset (from the current shader stack), as opposed to a built-in one -- shown separately and deletable. */
+  custom?: boolean;
 }

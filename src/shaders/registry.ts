@@ -572,6 +572,10 @@ uniform float u_contrast;
       { name: 'Retro', values: { characterSet: 1, colorMode: 1, contrast: 1.2, density: 0.4, tintColor: 16757575, tintAmount: 0.35, colorBlendMode: 9 } },
       { name: 'High Contrast', values: { threshold: 0.35, contrast: 1.6, gamma: 0.75, blackPoint: 0.08, whitePoint: 0.92, sharpness: 0.5, coverage: 1 } },
       { name: 'Overlay', values: { renderMode: 1, colorSource: 1, overlayColor: 16777215, overlayBlendMode: 5, overlayOpacity: 0.6, characterSet: 0, cellSize: 10 } },
+      { name: 'ASCII Studio', values: { renderMode: 1, colorSource: 0, characterSet: 3, cellSize: 9, charSpacing: 0.05, overlayBlendMode: 5, overlayOpacity: 0.9, coverage: 1, density: 0.6, contrast: 1.3, randomizeChars: 1, animStyle: 1, animSpeed: 1.5, animAmount: 0.4, animRandomness: 0.6 } },
+      { name: 'ASCII Sparkle', values: { renderMode: 1, colorSource: 0, characterSet: 3, cellSize: 16, charSpacing: 0.15, overlayBlendMode: 5, overlayOpacity: 0.85, coverage: 0.85, density: 0.15, contrast: 1.5, gamma: 0.55, blackPoint: 0.5, whitePoint: 1, randomizeChars: 1, animStyle: 1, animSpeed: 0.8, animAmount: 0.5, animRandomness: 0.7 } },
+      { name: 'Code Overlay', values: { renderMode: 1, colorSource: 0, characterSet: 4, cellSize: 10, overlayBlendMode: 5, overlayOpacity: 0.85, coverage: 0.9, density: 0.4, contrast: 1.2 } },
+      { name: 'Suit Overlay', values: { renderMode: 1, colorSource: 0, characterSet: 5, cellSize: 11, overlayBlendMode: 6, overlayOpacity: 0.85, coverage: 1, density: 0.5, contrast: 1.25, dotGridOverlay: 1 } },
     ],
     params: [
       // Character
@@ -588,7 +592,7 @@ uniform float u_contrast;
       },
       { key: 'cellSize', label: 'Font Size', type: 'float', default: 12, min: 4, max: 40, step: 1, group: 'Character' },
       { key: 'characterSet', label: 'Character Set', type: 'select', default: 0, options: CHARACTER_SET_OPTIONS, group: 'Character' },
-      { key: 'customChars', label: 'Custom Characters', type: 'text', default: 0, defaultText: BUILTIN_CHARSETS.ASCII, group: 'Character', visibleWhen: { key: 'characterSet', equals: 3 } },
+      { key: 'customChars', label: 'Custom Characters', type: 'text', default: 0, defaultText: BUILTIN_CHARSETS.ASCII, group: 'Character', visibleWhen: { key: 'characterSet', equals: 6 } },
       {
         key: 'colorMode',
         label: 'Mode',
@@ -1696,7 +1700,7 @@ float leakGlow(vec2 uv, vec2 center, float radius) {
     params: [
       { key: 'cellSize', label: 'Font Size', type: 'float', default: 14, min: 6, max: 32, step: 1 },
       { key: 'characterSet', label: 'Character Set', type: 'select', default: 0, options: CHARACTER_SET_OPTIONS },
-      { key: 'customChars', label: 'Custom Characters', type: 'text', default: 0, defaultText: BUILTIN_CHARSETS.ASCII, visibleWhen: { key: 'characterSet', equals: 3 } },
+      { key: 'customChars', label: 'Custom Characters', type: 'text', default: 0, defaultText: BUILTIN_CHARSETS.ASCII, visibleWhen: { key: 'characterSet', equals: 6 } },
       { key: 'speed', label: 'Fall Speed', type: 'float', default: 1, min: 0, max: 4, step: 0.05 },
       { key: 'density', label: 'Background', type: 'float', default: 0.35, min: 0, max: 1, step: 0.01, advanced: true },
       { key: 'glow', label: 'Head Glow', type: 'float', default: 0.7, min: 0, max: 1, step: 0.01, advanced: true },
