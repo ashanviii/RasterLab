@@ -25,6 +25,8 @@ export const CHARACTER_SET_OPTIONS = [
   { label: 'Code', value: 4 },
   { label: 'Suits', value: 5 },
   { label: 'Custom', value: 6 },
+  { label: 'Line', value: 7 },
+  { label: 'Plus', value: 8 },
 ];
 
 const CHARSET_BY_INDEX = [
