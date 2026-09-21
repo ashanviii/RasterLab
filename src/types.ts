@@ -48,6 +48,8 @@ export interface ShaderDef {
   category: ShaderCategory;
   description: string;
   thumbnail: string; // gradient key used to render a fake thumbnail
+  /** Optional static image path (e.g. '/thumbnails/ascii-studio.png') shown instead of the live-rendered preview. */
+  thumbnailImage?: string;
   fragmentShader: string;
   params: ParamDef[];
   custom?: boolean;

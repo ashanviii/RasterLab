@@ -346,6 +346,7 @@ export const BUILTIN_SHADERS: ShaderDef[] = [
     name: 'RGB Split',
     category: 'Color',
     description: 'Separate the red, green and blue channels along an angle.',
+    thumbnailImage: '\thumbnails\RGB Split.png',
     thumbnail: 'from-red-400 via-emerald-400 to-blue-400',
     params: [
       { key: 'intensity', label: 'Intensity', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },
@@ -385,6 +386,7 @@ uniform float u_colorBlendMode;
     name: 'Glitch',
     category: 'Distortion',
     description: 'Digital block displacement with color-channel tearing.',
+    thumbnailImage: '/thumbnails/glitch.png',
     thumbnail: 'from-fuchsia-500 via-cyan-400 to-yellow-300',
     params: [
       { key: 'amount', label: 'Amount', type: 'float', default: 0.4, min: 0, max: 1, step: 0.01 },
@@ -627,6 +629,7 @@ uniform float u_colorMode;
     name: 'Displacement',
     category: 'Distortion',
     description: 'Warp pixels along an animated noise field.',
+    thumbnailImage: '/thumbnails/Displacement.png',
     thumbnail: 'from-indigo-400 via-purple-400 to-pink-400',
     params: [
       { key: 'amount', label: 'Amount', type: 'float', default: 0.3, min: 0, max: 1, step: 0.01 },
@@ -832,6 +835,7 @@ uniform float u_roundness;
     name: 'Chromatic Aberration',
     category: 'Color',
     description: 'Lens-like radial color fringing.',
+    thumbnailImage: '/thumbnails/chromatic_aberration.png',
     thumbnail: 'from-red-400 via-white to-blue-400',
     params: [
       { key: 'intensity', label: 'Intensity', type: 'float', default: 0.5, min: 0, max: 1, step: 0.01 },

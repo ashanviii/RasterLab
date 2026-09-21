@@ -14,12 +14,16 @@ export default function ShaderListItem({ def, onAdd, onClick }: Props) {
   const [thumbnail, setThumbnail] = useState(() => getCachedThumbnail(cacheKey));
 
   useEffect(() => {
+    // A custom thumbnailImage takes priority -- skip the (expensive) live WebGL render entirely.
+    if (def.thumbnailImage) return;
     setThumbnail(getCachedThumbnail(cacheKey));
     const unsubscribe = subscribeThumbnails(() => setThumbnail(getCachedThumbnail(cacheKey)));
     ensureThumbnail(def);
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey]);
+  }, [cacheKey, def.thumbnailImage]);
+
+  const previewSrc = def.thumbnailImage ?? thumbnail;
 
   return (
     <div
@@ -27,7 +31,7 @@ export default function ShaderListItem({ def, onAdd, onClick }: Props) {
       className="group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-white/[0.02] transition-all duration-150 hover:border-neutral-300 dark:hover:border-white/20 hover:shadow-sm"
     >
       <div className={`relative aspect-square w-full overflow-hidden bg-gradient-to-br ${def.thumbnail}`}>
-        {thumbnail && <img src={thumbnail} alt="" draggable={false} className="h-full w-full object-cover" />}
+        {previewSrc && <img src={previewSrc} alt="" draggable={false} className="h-full w-full object-cover" />}
         <button
           onClick={(e) => {
             e.stopPropagation();
